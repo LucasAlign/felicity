@@ -1,0 +1,15 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    @apply antialiased;
+  }
+  body {
+    @apply bg-cream text-forest-800 font-sans;
+  }
+  h1, h2, h3, h4 {
+    @apply font-serif;
+  }
+}

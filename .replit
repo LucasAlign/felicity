@@ -1,0 +1,18 @@
+modules = ["nodejs-20"]
+run = "cd felicity && npm run dev"
+
+[agent]
+expertMode = true
+
+[[ports]]
+localPort = 5000
+externalPort = 80
+
+[[workflows.workflow]]
+name = "Dev Server"
+mode = "sequential"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd felicity && npm run dev"
+waitForPort = 5000
