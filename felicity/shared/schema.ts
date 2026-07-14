@@ -32,6 +32,10 @@ export const users = pgTable("users", {
   firstName: varchar("first_name"),
   lastName: varchar("last_name"),
   profileImageUrl: varchar("profile_image_url"),
+  // Null until the user finishes (or explicitly skips) the onboarding
+  // conversation. Never reset by the Replit Auth login upsert, since that
+  // only ever sends profile claim fields.
+  onboardingCompletedAt: timestamp("onboarding_completed_at"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

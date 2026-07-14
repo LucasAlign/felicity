@@ -3,6 +3,12 @@ import { format } from "date-fns";
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
 import { useSubmitBrainDump, type BrainDumpResult } from "@/hooks/useBrainDump";
 import { useOcrUpload } from "@/hooks/useOcrUpload";
+import { useDeleteAppointment } from "@/hooks/useAppointments";
+import { useDeleteTask } from "@/hooks/useTasks";
+import { useDeleteNote } from "@/hooks/useNotes";
+import { useDeleteIdea } from "@/hooks/useIdeas";
+import { useDeleteShoppingItem } from "@/hooks/useShoppingItems";
+import { useDeletePrayerRequest } from "@/hooks/usePrayerRequests";
 
 type Stage =
   | "intro"
@@ -14,26 +20,56 @@ type Stage =
 
 type Origin = "voice" | "manual" | "ocr_upload";
 
+// Anything below this reads as "we weren't fully sure" in the summary —
+// keep in sync with MIN_ACTIONABLE_CONFIDENCE in server/llmExtraction.ts.
+const LOW_CONFIDENCE_THRESHOLD = 0.5;
+
 function SummarySection({
   title,
   items,
+  onDelete,
 }: {
   title: string;
-  items: string[];
+  items: {
+    id: number;
+    label: string;
+    confidence: number | null;
+    reasoning: string | null;
+  }[];
+  onDelete: (id: number) => void;
 }) {
   if (items.length === 0) return null;
   return (
     <div>
       <h4 className="text-sm text-forest-500 mb-1.5">{title}</h4>
       <ul className="space-y-1">
-        {items.map((item, i) => (
-          <li
-            key={i}
-            className="rounded-lg bg-white/70 border border-forest-100 px-3 py-2 text-forest-700 text-sm"
-          >
-            {item}
-          </li>
-        ))}
+        {items.map((item) => {
+          const isUnsure =
+            item.confidence != null && item.confidence < LOW_CONFIDENCE_THRESHOLD;
+          return (
+            <li
+              key={item.id}
+              className="flex items-start gap-2 rounded-lg bg-white/70 border border-forest-100 px-3 py-2 text-forest-700 text-sm"
+              title={item.reasoning ?? undefined}
+            >
+              <span className="flex-1">
+                {item.label}
+                {isUnsure && (
+                  <span className="ml-2 rounded-full bg-walnut-100 text-walnut-600 text-xs px-2 py-0.5 align-middle whitespace-nowrap">
+                    not sure about this one
+                  </span>
+                )}
+              </span>
+              <button
+                onClick={() => onDelete(item.id)}
+                className="shrink-0 text-forest-300 hover:text-walnut-600"
+                aria-label={`Remove "${item.label}"`}
+              >
+                ✕
+              </button>
+            </li>
+          );
+        })}
       </ul>
     </div>
   );
@@ -56,6 +92,13 @@ export default function BrainDumpDialog({
   const submitBrainDump = useSubmitBrainDump();
   const ocrUpload = useOcrUpload();
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const deleteAppointment = useDeleteAppointment();
+  const deleteTask = useDeleteTask();
+  const deleteNote = useDeleteNote();
+  const deleteIdea = useDeleteIdea();
+  const deleteShoppingItem = useDeleteShoppingItem();
+  const deletePrayerRequest = useDeletePrayerRequest();
 
   useEffect(() => {
     if (!open) {
@@ -136,6 +179,31 @@ export default function BrainDumpDialog({
     setResult(null);
     setPhotoError(null);
     setStage("intro");
+  }
+
+  function removeFromResult(
+    category: Exclude<keyof BrainDumpResult, "brainDump">,
+    id: number,
+  ) {
+    setResult((prev) =>
+      prev
+        ? {
+            ...prev,
+            [category]: (prev[category] as { id: number }[]).filter(
+              (item) => item.id !== id,
+            ),
+          }
+        : prev,
+    );
+  }
+
+  function deleteItem(
+    category: Exclude<keyof BrainDumpResult, "brainDump">,
+    id: number,
+    mutation: { mutate: (id: number) => void },
+  ) {
+    removeFromResult(category, id);
+    mutation.mutate(id);
   }
 
   const totalItems = result
@@ -307,30 +375,69 @@ export default function BrainDumpDialog({
             <div className="space-y-4">
               <SummarySection
                 title="Appointments"
-                items={result.appointments.map(
-                  (a) =>
-                    `${a.title} — ${a.allDay ? "all day" : format(new Date(a.startTime), "EEE MMM d, h:mma")}`,
-                )}
+                items={result.appointments.map((a) => ({
+                  id: a.id,
+                  label: `${a.title} — ${a.allDay ? "all day" : format(new Date(a.startTime), "EEE MMM d, h:mma")}`,
+                  confidence: a.confidence,
+                  reasoning: a.aiReasoning,
+                }))}
+                onDelete={(id) =>
+                  deleteItem("appointments", id, deleteAppointment)
+                }
               />
               <SummarySection
                 title="Tasks"
-                items={result.tasks.map((t) => t.title)}
+                items={result.tasks.map((t) => ({
+                  id: t.id,
+                  label: t.title,
+                  confidence: t.confidence,
+                  reasoning: t.aiReasoning,
+                }))}
+                onDelete={(id) => deleteItem("tasks", id, deleteTask)}
               />
               <SummarySection
                 title="Shopping"
-                items={result.shoppingItems.map((s) => s.item)}
+                items={result.shoppingItems.map((s) => ({
+                  id: s.id,
+                  label: s.item,
+                  confidence: s.confidence,
+                  reasoning: s.aiReasoning,
+                }))}
+                onDelete={(id) =>
+                  deleteItem("shoppingItems", id, deleteShoppingItem)
+                }
               />
               <SummarySection
                 title="Notes"
-                items={result.notes.map((n) => n.content)}
+                items={result.notes.map((n) => ({
+                  id: n.id,
+                  label: n.content,
+                  confidence: n.confidence,
+                  reasoning: n.aiReasoning,
+                }))}
+                onDelete={(id) => deleteItem("notes", id, deleteNote)}
               />
               <SummarySection
                 title="Ideas"
-                items={result.ideas.map((i) => i.content)}
+                items={result.ideas.map((i) => ({
+                  id: i.id,
+                  label: i.content,
+                  confidence: i.confidence,
+                  reasoning: i.aiReasoning,
+                }))}
+                onDelete={(id) => deleteItem("ideas", id, deleteIdea)}
               />
               <SummarySection
                 title="Prayer requests"
-                items={result.prayerRequests.map((p) => p.content)}
+                items={result.prayerRequests.map((p) => ({
+                  id: p.id,
+                  label: p.content,
+                  confidence: p.confidence,
+                  reasoning: p.aiReasoning,
+                }))}
+                onDelete={(id) =>
+                  deleteItem("prayerRequests", id, deletePrayerRequest)
+                }
               />
             </div>
 

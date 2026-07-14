@@ -3,14 +3,14 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/useAuth";
 import Landing from "@/pages/Landing";
+import Onboarding from "@/pages/Onboarding";
 import Dashboard from "@/pages/Dashboard";
 import Calendar from "@/pages/Calendar";
-import Tasks from "@/pages/Tasks";
 import WhatIKnow from "@/pages/WhatIKnow";
 import AppShell from "@/components/AppShell";
 
 function Router() {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, user } = useAuth();
 
   if (isLoading) {
     return (
@@ -24,12 +24,15 @@ function Router() {
     return <Landing />;
   }
 
+  if (!user?.onboardingCompletedAt) {
+    return <Onboarding />;
+  }
+
   return (
     <AppShell>
       <Switch>
         <Route path="/" component={Dashboard} />
         <Route path="/calendar" component={Calendar} />
-        <Route path="/tasks" component={Tasks} />
         <Route path="/what-i-know" component={WhatIKnow} />
         <Route>
           <div className="text-forest-400">Page not found.</div>

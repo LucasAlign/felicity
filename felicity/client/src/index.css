@@ -7,9 +7,24 @@
     @apply antialiased;
   }
   body {
-    @apply bg-cream text-forest-800 font-sans;
+    @apply text-forest-800 font-sans bg-cream leading-relaxed;
+    background-image:
+      radial-gradient(ellipse 80% 55% at 50% 0%, rgba(255, 253, 248, 0.55), rgba(255, 253, 248, 0) 65%),
+      linear-gradient(180deg, rgba(247, 241, 230, 0.55), rgba(237, 242, 239, 0.55)),
+      url("/cream-wallpaper.jpg");
+    background-size: cover, cover, cover;
+    background-position: center, center, center;
+    background-attachment: fixed, fixed, fixed;
+    background-repeat: no-repeat, no-repeat, no-repeat;
   }
   h1, h2, h3, h4 {
-    @apply font-serif;
+    @apply font-serif tracking-tight;
+  }
+  ::selection {
+    @apply bg-haze-200 text-forest-800;
+  }
+  :focus-visible {
+    outline: 2px solid theme("colors.haze.400");
+    outline-offset: 2px;
   }
 }

@@ -1,4 +1,5 @@
 import { addDays, setHours, setMinutes, setSeconds, startOfDay } from "date-fns";
+import { llmExtractionEngine, MIN_ACTIONABLE_CONFIDENCE } from "./llmExtraction";
 
 export interface ExtractedAppointment {
   title: string;
@@ -229,6 +230,56 @@ export const ruleBasedExtractionEngine: ExtractionEngine = {
   extract: ruleBasedExtract,
 };
 
-// Swap this binding for an LLM-backed engine when ready — everything that
-// calls extractionEngine.extract() stays the same.
-export const extractionEngine: ExtractionEngine = ruleBasedExtractionEngine;
+// Backstop applied after either engine runs: a task/appointment the engine
+// wasn't confident about doesn't get to become an actionable item on its
+// own. Nothing is discarded — it's downgraded to a note instead, so it's
+// still visible and easy to promote back if it was actually right.
+function applyConfidenceGuardrail(result: ExtractionResult): ExtractionResult {
+  const tasks: ExtractedTask[] = [];
+  const appointments: ExtractedAppointment[] = [];
+  const notes: ExtractedNote[] = [...result.notes];
+
+  for (const task of result.tasks) {
+    if (task.confidence < MIN_ACTIONABLE_CONFIDENCE) {
+      notes.push({
+        content: task.title,
+        confidence: task.confidence,
+        reasoning: `${task.reasoning} Kept as a note instead of a task — not confident enough to treat as a firm commitment.`,
+      });
+    } else {
+      tasks.push(task);
+    }
+  }
+
+  for (const appointment of result.appointments) {
+    if (appointment.confidence < MIN_ACTIONABLE_CONFIDENCE) {
+      notes.push({
+        content: appointment.title,
+        confidence: appointment.confidence,
+        reasoning: `${appointment.reasoning} Kept as a note instead of an appointment — not confident enough to treat as a firm commitment.`,
+      });
+    } else {
+      appointments.push(appointment);
+    }
+  }
+
+  return { ...result, tasks, appointments, notes };
+}
+
+// LLM-backed engine (server/llmExtraction.ts) actually segments a rambling
+// transcript into its individual items instead of splitting on punctuation.
+// If the model call fails for any reason (no API key, rate limit, bad JSON),
+// fall back to the rule-based engine rather than failing the Brain Dump
+// request outright.
+export const extractionEngine: ExtractionEngine = {
+  async extract(transcript: string) {
+    let result: ExtractionResult;
+    try {
+      result = await llmExtractionEngine.extract(transcript);
+    } catch (err) {
+      console.error("LLM extraction failed, falling back to rule-based:", err);
+      result = ruleBasedExtract(transcript);
+    }
+    return applyConfidenceGuardrail(result);
+  },
+};

@@ -1,5 +1,4 @@
 import { format } from "date-fns";
-import { Link } from "wouter";
 import type { Task } from "@shared/schema";
 import { useDeleteTask, useUpdateTask } from "@/hooks/useTasks";
 
@@ -54,13 +53,6 @@ export default function TasksPanel({ tasks }: { tasks: Task[] }) {
           ))}
         </ul>
       )}
-
-      <Link
-        href="/tasks"
-        className="inline-block mt-3 text-forest-500 hover:text-forest-700 underline text-sm"
-      >
-        View all tasks
-      </Link>
     </div>
   );
 }

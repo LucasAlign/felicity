@@ -9,6 +9,7 @@ import {
   brainDumps,
   notifications,
   memories,
+  type MemoryCategory,
   type User,
   type UpsertUser,
   type Appointment,
@@ -36,6 +37,7 @@ import { and, desc, eq, isNull, lte } from "drizzle-orm";
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
   upsertUser(user: UpsertUser): Promise<User>;
+  completeOnboarding(userId: string): Promise<User>;
 
   listAppointments(userId: string): Promise<Appointment[]>;
   createAppointment(
@@ -122,6 +124,13 @@ export interface IStorage {
     patternKey: string,
   ): Promise<Memory | undefined>;
   createMemory(userId: string, data: InsertMemory): Promise<Memory>;
+  // Used only by the onboarding conversation: the user is deliberately
+  // volunteering this, so it skips the pending/confirm suggestion flow
+  // that auto-detected patterns go through.
+  createConfirmedMemory(
+    userId: string,
+    data: { category: MemoryCategory; content: string },
+  ): Promise<Memory>;
   updateMemory(
     userId: string,
     id: number,
@@ -152,6 +161,15 @@ export class DatabaseStorage implements IStorage {
           updatedAt: new Date(),
         },
       })
+      .returning();
+    return user;
+  }
+
+  async completeOnboarding(userId: string): Promise<User> {
+    const [user] = await db
+      .update(users)
+      .set({ onboardingCompletedAt: new Date(), updatedAt: new Date() })
+      .where(eq(users.id, userId))
       .returning();
     return user;
   }
@@ -487,6 +505,17 @@ export class DatabaseStorage implements IStorage {
     const [memory] = await db
       .insert(memories)
       .values({ ...data, userId })
+      .returning();
+    return memory;
+  }
+
+  async createConfirmedMemory(
+    userId: string,
+    data: { category: MemoryCategory; content: string },
+  ): Promise<Memory> {
+    const [memory] = await db
+      .insert(memories)
+      .values({ ...data, userId, status: "confirmed" })
       .returning();
     return memory;
   }

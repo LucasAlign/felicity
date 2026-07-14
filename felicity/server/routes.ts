@@ -11,6 +11,7 @@ import {
   insertShoppingItemSchema,
   insertPrayerRequestSchema,
   insertMemorySchema,
+  memoryCategoryEnum,
 } from "@shared/schema";
 import { extractionEngine } from "./extraction";
 import { syncAppointmentReminders } from "./notifications";
@@ -20,6 +21,11 @@ import { z } from "zod";
 
 const memoryResponseSchema = z.object({
   response: z.enum(["yes", "no", "dont_ask_again"]),
+});
+
+const onboardingAnswerSchema = z.object({
+  category: z.enum(memoryCategoryEnum.enumValues),
+  content: z.string().min(1),
 });
 
 const brainDumpRequestSchema = z.object({
@@ -428,6 +434,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(notification);
     },
   );
+
+  // Onboarding — a short, skippable first-run conversation. Answers are
+  // volunteered directly by the user, so they land as confirmed memories
+  // immediately instead of going through the pending/confirm flow that
+  // auto-detected patterns use.
+  app.post("/api/onboarding/answer", isAuthenticated, async (req: any, res) => {
+    const parsed = onboardingAnswerSchema.safeParse(req.body);
+    if (!parsed.success)
+      return res.status(400).json({ message: parsed.error.message });
+    const memory = await storage.createConfirmedMemory(
+      req.user.claims.sub,
+      parsed.data,
+    );
+    res.status(201).json(memory);
+  });
+
+  app.post("/api/onboarding/complete", isAuthenticated, async (req: any, res) => {
+    const user = await storage.completeOnboarding(req.user.claims.sub);
+    res.json(user);
+  });
 
   // Memories — "What I Know About You". Every suggestion starts as
   // `pending` and only becomes an active memory once the user says yes;

@@ -40,10 +40,23 @@ export default {
           300: "#E6D6AD",
         },
         linen: "#EFE7D8",
+        haze: {
+          DEFAULT: "#647D9C",
+          50: "#F3F6F8",
+          100: "#E4EAF0",
+          200: "#C7D3E0",
+          300: "#A6B9CC",
+          400: "#8399B3",
+          500: "#647D9C",
+          600: "#4F6580",
+          700: "#3D4F65",
+          800: "#2B394A",
+          900: "#1A222D",
+        },
       },
       fontFamily: {
         serif: ["Fraunces", "Georgia", "serif"],
-        sans: ["Inter", "system-ui", "sans-serif"],
+        sans: ["Plus Jakarta Sans", "system-ui", "sans-serif"],
       },
       borderRadius: {
         lg: "1rem",
@@ -51,7 +64,16 @@ export default {
         "2xl": "2rem",
       },
       boxShadow: {
-        soft: "0 4px 24px rgba(47, 74, 60, 0.08)",
+        soft: "0 1px 2px rgba(47, 74, 60, 0.04), 0 4px 24px rgba(47, 74, 60, 0.08)",
+        "soft-md":
+          "0 2px 8px rgba(47, 74, 60, 0.06), 0 14px 34px rgba(47, 74, 60, 0.10)",
+        "soft-lg":
+          "0 4px 16px rgba(47, 74, 60, 0.08), 0 24px 48px rgba(47, 74, 60, 0.14)",
+        "soft-up": "0 -8px 30px rgba(47, 74, 60, 0.10)",
+        "inset-glow": "inset 0 1px 0 0 rgba(255, 255, 255, 0.65)",
+        card: "inset 0 1px 0 0 rgba(255, 255, 255, 0.7), 0 1px 2px rgba(47, 74, 60, 0.04), 0 10px 30px rgba(47, 74, 60, 0.08)",
+        "card-hover":
+          "inset 0 1px 0 0 rgba(255, 255, 255, 0.7), 0 2px 6px rgba(47, 74, 60, 0.06), 0 18px 40px rgba(47, 74, 60, 0.13)",
       },
     },
   },
