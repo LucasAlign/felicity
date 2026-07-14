@@ -9,6 +9,7 @@ import {
   brainDumps,
   notifications,
   memories,
+  googleCalendarConnections,
   type MemoryCategory,
   type User,
   type UpsertUser,
@@ -30,9 +31,23 @@ import {
   type InsertNotification,
   type Memory,
   type InsertMemory,
+  type GoogleCalendarConnection,
 } from "@shared/schema";
 import { db } from "./db";
 import { and, desc, eq, isNull, lte } from "drizzle-orm";
+
+type AppointmentSyncState = {
+  externalId?: string | null;
+  googleUpdatedAt?: Date | null;
+  syncStatus?: "synced" | "pending_push" | "conflict";
+};
+
+type GoogleCalendarConnectionInput = {
+  accessToken: string;
+  refreshToken: string;
+  expiresAt: number;
+  googleCalendarId?: string;
+};
 
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
@@ -40,16 +55,42 @@ export interface IStorage {
   completeOnboarding(userId: string): Promise<User>;
 
   listAppointments(userId: string): Promise<Appointment[]>;
+  getAppointment(userId: string, id: number): Promise<Appointment | undefined>;
+  getAppointmentByExternalId(
+    userId: string,
+    externalId: string,
+  ): Promise<Appointment | undefined>;
+  listAppointmentsPendingPush(userId: string): Promise<Appointment[]>;
   createAppointment(
     userId: string,
     data: InsertAppointment,
+    syncState?: AppointmentSyncState,
   ): Promise<Appointment>;
   updateAppointment(
     userId: string,
     id: number,
     data: Partial<InsertAppointment>,
+    syncState?: AppointmentSyncState,
   ): Promise<Appointment | undefined>;
   deleteAppointment(userId: string, id: number): Promise<boolean>;
+
+  getGoogleCalendarConnection(
+    userId: string,
+  ): Promise<GoogleCalendarConnection | undefined>;
+  listEnabledGoogleCalendarConnections(): Promise<GoogleCalendarConnection[]>;
+  upsertGoogleCalendarConnection(
+    userId: string,
+    data: GoogleCalendarConnectionInput,
+  ): Promise<GoogleCalendarConnection>;
+  updateGoogleCalendarConnection(
+    userId: string,
+    data: Partial<GoogleCalendarConnectionInput> & {
+      syncToken?: string | null;
+      enabled?: boolean;
+      lastSyncedAt?: Date;
+    },
+  ): Promise<GoogleCalendarConnection | undefined>;
+  deleteGoogleCalendarConnection(userId: string): Promise<boolean>;
 
   listTasks(userId: string): Promise<Task[]>;
   createTask(userId: string, data: InsertTask): Promise<Task>;
@@ -181,13 +222,53 @@ export class DatabaseStorage implements IStorage {
       .where(eq(appointments.userId, userId));
   }
 
+  async getAppointment(
+    userId: string,
+    id: number,
+  ): Promise<Appointment | undefined> {
+    const [appointment] = await db
+      .select()
+      .from(appointments)
+      .where(and(eq(appointments.id, id), eq(appointments.userId, userId)));
+    return appointment;
+  }
+
+  async getAppointmentByExternalId(
+    userId: string,
+    externalId: string,
+  ): Promise<Appointment | undefined> {
+    const [appointment] = await db
+      .select()
+      .from(appointments)
+      .where(
+        and(
+          eq(appointments.userId, userId),
+          eq(appointments.externalId, externalId),
+        ),
+      );
+    return appointment;
+  }
+
+  async listAppointmentsPendingPush(userId: string): Promise<Appointment[]> {
+    return db
+      .select()
+      .from(appointments)
+      .where(
+        and(
+          eq(appointments.userId, userId),
+          eq(appointments.syncStatus, "pending_push"),
+        ),
+      );
+  }
+
   async createAppointment(
     userId: string,
     data: InsertAppointment,
+    syncState?: AppointmentSyncState,
   ): Promise<Appointment> {
     const [appointment] = await db
       .insert(appointments)
-      .values({ ...data, userId })
+      .values({ ...data, userId, ...syncState })
       .returning();
     return appointment;
   }
@@ -196,10 +277,11 @@ export class DatabaseStorage implements IStorage {
     userId: string,
     id: number,
     data: Partial<InsertAppointment>,
+    syncState?: AppointmentSyncState,
   ): Promise<Appointment | undefined> {
     const [appointment] = await db
       .update(appointments)
-      .set({ ...data, updatedAt: new Date() })
+      .set({ ...data, ...syncState, updatedAt: new Date() })
       .where(and(eq(appointments.id, id), eq(appointments.userId, userId)))
       .returning();
     return appointment;
@@ -555,6 +637,71 @@ export class DatabaseStorage implements IStorage {
       .delete(memories)
       .where(and(eq(memories.id, id), eq(memories.userId, userId)))
       .returning({ id: memories.id });
+    return result.length > 0;
+  }
+
+  async getGoogleCalendarConnection(
+    userId: string,
+  ): Promise<GoogleCalendarConnection | undefined> {
+    const [connection] = await db
+      .select()
+      .from(googleCalendarConnections)
+      .where(eq(googleCalendarConnections.userId, userId));
+    return connection;
+  }
+
+  async listEnabledGoogleCalendarConnections(): Promise<
+    GoogleCalendarConnection[]
+  > {
+    return db
+      .select()
+      .from(googleCalendarConnections)
+      .where(eq(googleCalendarConnections.enabled, true));
+  }
+
+  async upsertGoogleCalendarConnection(
+    userId: string,
+    data: GoogleCalendarConnectionInput,
+  ): Promise<GoogleCalendarConnection> {
+    const [connection] = await db
+      .insert(googleCalendarConnections)
+      .values({ ...data, userId })
+      .onConflictDoUpdate({
+        target: googleCalendarConnections.userId,
+        set: {
+          ...data,
+          // Reconnecting always resumes syncing and starts from a clean
+          // cursor — the previous syncToken belonged to the old grant.
+          enabled: true,
+          syncToken: null,
+          updatedAt: new Date(),
+        },
+      })
+      .returning();
+    return connection;
+  }
+
+  async updateGoogleCalendarConnection(
+    userId: string,
+    data: Partial<GoogleCalendarConnectionInput> & {
+      syncToken?: string | null;
+      enabled?: boolean;
+      lastSyncedAt?: Date;
+    },
+  ): Promise<GoogleCalendarConnection | undefined> {
+    const [connection] = await db
+      .update(googleCalendarConnections)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(googleCalendarConnections.userId, userId))
+      .returning();
+    return connection;
+  }
+
+  async deleteGoogleCalendarConnection(userId: string): Promise<boolean> {
+    const result = await db
+      .delete(googleCalendarConnections)
+      .where(eq(googleCalendarConnections.userId, userId))
+      .returning({ id: googleCalendarConnections.id });
     return result.length > 0;
   }
 }

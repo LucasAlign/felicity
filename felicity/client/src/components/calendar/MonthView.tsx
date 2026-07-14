@@ -69,7 +69,20 @@ export default function MonthView({
                   <div
                     key={a.id}
                     className="truncate rounded bg-forest-100 px-1.5 py-0.5 text-xs text-forest-700"
+                    title={
+                      a.syncStatus === "conflict"
+                        ? "Synced with Google Calendar — a conflicting edit was auto-resolved"
+                        : a.source === "google_calendar"
+                          ? "Synced with Google Calendar"
+                          : undefined
+                    }
                   >
+                    {a.source === "google_calendar" && (
+                      <span className="text-forest-400">●&nbsp;</span>
+                    )}
+                    {a.syncStatus === "conflict" && (
+                      <span className="text-walnut-500">⚠&nbsp;</span>
+                    )}
                     {a.allDay ? "" : format(new Date(a.startTime), "h:mma ")}
                     {a.title}
                   </div>

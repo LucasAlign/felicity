@@ -50,6 +50,18 @@ export const itemSourceEnum = pgEnum("item_source", [
   "manual_entry",
   "ocr_upload",
   "ai_conversation",
+  "google_calendar",
+]);
+
+// Only meaningful once an appointment has an externalId (i.e. it's linked to
+// a Google Calendar event). "synced" means both sides agree as of the last
+// sync pass; "pending_push" means a local write hasn't reached Google yet
+// (created/edited while disconnected, or the push call failed); "conflict"
+// means both sides changed since the last sync and neither was auto-resolved.
+export const appointmentSyncStatusEnum = pgEnum("appointment_sync_status", [
+  "synced",
+  "pending_push",
+  "conflict",
 ]);
 
 export const appointments = pgTable("appointments", {
@@ -66,6 +78,17 @@ export const appointments = pgTable("appointments", {
   source: itemSourceEnum("source").notNull().default("manual_entry"),
   confidence: real("confidence"),
   aiReasoning: text("ai_reasoning"),
+  // Google Calendar sync bookkeeping — all null/default for appointments that
+  // have never touched Google. externalId is that event's id on the synced
+  // calendar; googleUpdatedAt mirrors Google's `updated` field as of the last
+  // successful push or pull, which is what lets the sync engine tell "this is
+  // just our own change echoing back" apart from "Google actually changed
+  // it" without needing a separate outbox table.
+  externalId: varchar("external_id"),
+  googleUpdatedAt: timestamp("google_updated_at"),
+  syncStatus: appointmentSyncStatusEnum("sync_status")
+    .notNull()
+    .default("synced"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -73,7 +96,15 @@ export const appointments = pgTable("appointments", {
 export const insertAppointmentSchema = createInsertSchema(appointments, {
   startTime: z.coerce.date(),
   endTime: z.coerce.date().nullish(),
-}).omit({ id: true, userId: true, createdAt: true, updatedAt: true });
+}).omit({
+  id: true,
+  userId: true,
+  createdAt: true,
+  updatedAt: true,
+  externalId: true,
+  googleUpdatedAt: true,
+  syncStatus: true,
+});
 export type InsertAppointment = z.infer<typeof insertAppointmentSchema>;
 export type Appointment = typeof appointments.$inferSelect;
 
@@ -295,3 +326,32 @@ export const insertBrainDumpSchema = createInsertSchema(brainDumps, {
 });
 export type InsertBrainDump = z.infer<typeof insertBrainDumpSchema>;
 export type BrainDump = typeof brainDumps.$inferSelect;
+
+// One row per user — a single Google account/calendar can be linked at a
+// time. Tokens are Google OAuth tokens, entirely separate from the Replit
+// Auth session (Replit Auth never grants Google Calendar scopes).
+export const googleCalendarConnections = pgTable("google_calendar_connections", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id")
+    .notNull()
+    .unique()
+    .references(() => users.id),
+  accessToken: text("access_token").notNull(),
+  refreshToken: text("refresh_token").notNull(),
+  // Unix seconds, matching how the access token's own expiry is expressed.
+  expiresAt: integer("expires_at").notNull(),
+  googleCalendarId: varchar("google_calendar_id").notNull().default("primary"),
+  // Google's incremental-sync cursor for events.list. Null forces a full
+  // resync (also forced on a 410 Gone response, which means this token
+  // expired on Google's side).
+  syncToken: text("sync_token"),
+  enabled: boolean("enabled").notNull().default(true),
+  lastSyncedAt: timestamp("last_synced_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export type GoogleCalendarConnection =
+  typeof googleCalendarConnections.$inferSelect;
+export type UpsertGoogleCalendarConnection =
+  typeof googleCalendarConnections.$inferInsert;

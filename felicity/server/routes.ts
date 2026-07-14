@@ -18,6 +18,22 @@ import { syncAppointmentReminders } from "./notifications";
 import { ocrEngine } from "./ocr";
 import { scanForMemories } from "./memoryEngine";
 import { z } from "zod";
+import {
+  exchangeGoogleAuthCode,
+  getGoogleAuthUrl,
+  getValidAccessToken,
+} from "./googleCalendarAuth";
+import { listCalendars } from "./googleCalendarClient";
+import {
+  deleteAppointmentFromGoogle,
+  pushAppointmentToGoogle,
+  runFullSync,
+} from "./googleCalendarSync";
+
+const googleCalendarSettingsSchema = z.object({
+  enabled: z.boolean().optional(),
+  googleCalendarId: z.string().min(1).optional(),
+});
 
 const memoryResponseSchema = z.object({
   response: z.enum(["yes", "no", "dont_ask_again"]),
@@ -62,8 +78,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!parsed.success) {
       return res.status(400).json({ message: parsed.error.message });
     }
-    const appointment = await storage.createAppointment(userId, parsed.data);
+    let appointment = await storage.createAppointment(userId, parsed.data);
     await syncAppointmentReminders(userId, appointment);
+    // Mirror to Google right away so it shows up there without waiting for
+    // the next scheduled sync tick. Never fails the request — a Google hiccup
+    // just leaves it "pending_push" for the periodic sync to retry.
+    await pushAppointmentToGoogle(userId, appointment);
+    appointment = (await storage.getAppointment(userId, appointment.id)) ?? appointment;
     res.status(201).json(appointment);
   });
 
@@ -74,17 +95,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!parsed.success) {
       return res.status(400).json({ message: parsed.error.message });
     }
-    const appointment = await storage.updateAppointment(userId, id, parsed.data);
+    let appointment = await storage.updateAppointment(userId, id, parsed.data);
     if (!appointment) return res.status(404).json({ message: "Not found" });
     await syncAppointmentReminders(userId, appointment);
+    await pushAppointmentToGoogle(userId, appointment);
+    appointment = (await storage.getAppointment(userId, id)) ?? appointment;
     res.json(appointment);
   });
 
   app.delete("/api/appointments/:id", isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;
     const id = Number(req.params.id);
-    const deleted = await storage.deleteAppointment(userId, id);
-    if (!deleted) return res.status(404).json({ message: "Not found" });
+    const appointment = await storage.getAppointment(userId, id);
+    if (!appointment) return res.status(404).json({ message: "Not found" });
+    await deleteAppointmentFromGoogle(userId, appointment);
+    await storage.deleteAppointment(userId, id);
     res.status(204).end();
   });
 
@@ -505,6 +530,114 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!deleted) return res.status(404).json({ message: "Not found" });
     res.status(204).end();
   });
+
+  // Google Calendar sync — a separate OAuth grant from Replit Auth (Replit
+  // Auth never has Calendar scopes), so connection state lives in its own
+  // table rather than piggybacking on the user's session tokens.
+  app.get(
+    "/api/integrations/google-calendar/connect",
+    isAuthenticated,
+    (req: any, res) => {
+      res.redirect(getGoogleAuthUrl(req.user.claims.sub));
+    },
+  );
+
+  app.get(
+    "/api/integrations/google-calendar/callback",
+    isAuthenticated,
+    async (req: any, res) => {
+      const code = req.query.code;
+      if (typeof code !== "string") {
+        return res.redirect("/calendar?google_calendar=error");
+      }
+      try {
+        const tokens = await exchangeGoogleAuthCode(code);
+        const userId = req.user.claims.sub;
+        await storage.upsertGoogleCalendarConnection(userId, tokens);
+        // Best-effort initial sync so the calendar isn't empty until the
+        // next scheduled tick; a failure here doesn't undo the connection.
+        runFullSync(userId).catch((err) =>
+          console.error(`Initial Google Calendar sync failed for ${userId}:`, err),
+        );
+        res.redirect("/calendar?google_calendar=connected");
+      } catch (err) {
+        console.error("Google Calendar OAuth callback failed:", err);
+        res.redirect("/calendar?google_calendar=error");
+      }
+    },
+  );
+
+  app.get(
+    "/api/integrations/google-calendar/status",
+    isAuthenticated,
+    async (req: any, res) => {
+      const connection = await storage.getGoogleCalendarConnection(
+        req.user.claims.sub,
+      );
+      if (!connection) return res.json({ connected: false });
+      res.json({
+        connected: true,
+        enabled: connection.enabled,
+        googleCalendarId: connection.googleCalendarId,
+        lastSyncedAt: connection.lastSyncedAt,
+      });
+    },
+  );
+
+  app.get(
+    "/api/integrations/google-calendar/calendars",
+    isAuthenticated,
+    async (req: any, res) => {
+      const userId = req.user.claims.sub;
+      const connection = await storage.getGoogleCalendarConnection(userId);
+      if (!connection) return res.status(404).json({ message: "Not connected" });
+      const accessToken = await getValidAccessToken(userId);
+      res.json(await listCalendars(accessToken));
+    },
+  );
+
+  app.patch(
+    "/api/integrations/google-calendar/settings",
+    isAuthenticated,
+    async (req: any, res) => {
+      const parsed = googleCalendarSettingsSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.message });
+      }
+      const connection = await storage.updateGoogleCalendarConnection(
+        req.user.claims.sub,
+        parsed.data,
+      );
+      if (!connection) return res.status(404).json({ message: "Not connected" });
+      res.json({
+        connected: true,
+        enabled: connection.enabled,
+        googleCalendarId: connection.googleCalendarId,
+        lastSyncedAt: connection.lastSyncedAt,
+      });
+    },
+  );
+
+  app.post(
+    "/api/integrations/google-calendar/sync",
+    isAuthenticated,
+    async (req: any, res) => {
+      const userId = req.user.claims.sub;
+      const connection = await storage.getGoogleCalendarConnection(userId);
+      if (!connection) return res.status(404).json({ message: "Not connected" });
+      await runFullSync(userId);
+      res.json({ synced: true });
+    },
+  );
+
+  app.delete(
+    "/api/integrations/google-calendar",
+    isAuthenticated,
+    async (req: any, res) => {
+      await storage.deleteGoogleCalendarConnection(req.user.claims.sub);
+      res.status(204).end();
+    },
+  );
 
   return createServer(app);
 }

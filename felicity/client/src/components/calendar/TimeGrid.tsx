@@ -56,7 +56,13 @@ export default function TimeGrid({
                     key={a.id}
                     onClick={() => onSelectAppointment(a)}
                     className="w-full truncate rounded bg-walnut-100 px-1.5 py-0.5 text-xs text-walnut-700 text-left"
+                    title={
+                      a.source === "google_calendar"
+                        ? "Synced with Google Calendar"
+                        : undefined
+                    }
                   >
+                    {a.source === "google_calendar" && "● "}
                     {a.title}
                   </button>
                 ))}
@@ -108,8 +114,16 @@ export default function TimeGrid({
                       onClick={() => onSelectAppointment(a)}
                       style={{ top, height }}
                       className="absolute left-0.5 right-0.5 rounded-md bg-forest-500 text-cream-50 text-left px-1.5 py-0.5 text-xs shadow-soft overflow-hidden hover:bg-forest-600 transition-colors"
+                      title={
+                        a.source === "google_calendar"
+                          ? "Synced with Google Calendar"
+                          : undefined
+                      }
                     >
-                      <div className="font-medium truncate">{a.title}</div>
+                      <div className="font-medium truncate">
+                        {a.source === "google_calendar" && "● "}
+                        {a.title}
+                      </div>
                       <div className="opacity-80 truncate">
                         {format(new Date(a.startTime), "h:mma")}
                       </div>

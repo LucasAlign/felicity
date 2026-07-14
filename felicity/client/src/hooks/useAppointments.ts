@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import type { Appointment, InsertAppointment } from "@shared/schema";
 
-const KEY = ["/api/appointments"];
+export const KEY = ["/api/appointments"];
 
 export function useAppointments() {
   return useQuery<Appointment[]>({ queryKey: KEY });

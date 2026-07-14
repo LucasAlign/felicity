@@ -15,6 +15,7 @@ import WeekView from "@/components/calendar/WeekView";
 import DayView from "@/components/calendar/DayView";
 import TasksPanel from "@/components/calendar/TasksPanel";
 import QuickAddDialog from "@/components/calendar/QuickAddDialog";
+import GoogleCalendarPanel from "@/components/calendar/GoogleCalendarPanel";
 import type { Appointment } from "@shared/schema";
 
 type ViewMode = "month" | "week" | "day";
@@ -126,6 +127,8 @@ export default function Calendar() {
           >
             + Add
           </button>
+
+          <GoogleCalendarPanel />
         </div>
       </div>
 
