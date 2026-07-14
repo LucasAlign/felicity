@@ -16,3 +16,8 @@ mode = "sequential"
 task = "shell.exec"
 args = "cd felicity && npm run dev"
 waitForPort = 5000
+
+[deployment]
+deploymentTarget = "cloudrun"
+build = ["sh", "-c", "cd felicity && npm run build"]
+run = ["sh", "-c", "cd felicity && npm run start"]
