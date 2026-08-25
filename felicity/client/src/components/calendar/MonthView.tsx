@@ -9,6 +9,7 @@ import {
   startOfMonth,
   startOfWeek,
 } from "date-fns";
+import { Clock, Sun } from "lucide-react";
 import type { Appointment } from "@shared/schema";
 import { useCategories } from "@/hooks/useCategories";
 import { colorForCategory } from "@/lib/categories";
@@ -71,7 +72,7 @@ export default function MonthView({
                 {dayAppointments.slice(0, 3).map((a) => (
                   <div
                     key={a.id}
-                    className="truncate rounded bg-forest-100 px-1.5 py-0.5 text-xs text-forest-700"
+                    className="flex items-center gap-1 rounded bg-forest-100 px-1.5 py-0.5 text-xs text-forest-700"
                     title={
                       a.syncStatus === "conflict"
                         ? "Synced with Google Calendar — a conflicting edit was auto-resolved"
@@ -81,20 +82,29 @@ export default function MonthView({
                     }
                   >
                     <span
-                      className="mr-1 inline-block h-2 w-2 shrink-0 rounded-full align-middle"
+                      className="inline-block h-2 w-2 shrink-0 rounded-full"
                       style={{
                         backgroundColor: colorForCategory(a.categoryId, categories),
                       }}
                       aria-hidden="true"
                     />
                     {a.source === "google_calendar" && (
-                      <span className="text-forest-400">●&nbsp;</span>
+                      <span className="shrink-0 text-forest-400">●</span>
                     )}
                     {a.syncStatus === "conflict" && (
-                      <span className="text-walnut-500">⚠&nbsp;</span>
+                      <span className="shrink-0 text-walnut-500">⚠</span>
                     )}
-                    {a.allDay ? "" : format(new Date(a.startTime), "h:mma ")}
-                    {a.title}
+                    {a.allDay ? (
+                      <Sun className="h-3 w-3 shrink-0 text-forest-400" aria-hidden="true" />
+                    ) : (
+                      <Clock className="h-3 w-3 shrink-0 text-forest-400" aria-hidden="true" />
+                    )}
+                    {!a.allDay && (
+                      <span className="shrink-0 tabular-nums">
+                        {format(new Date(a.startTime), "h:mma")}
+                      </span>
+                    )}
+                    <span className="truncate">{a.title}</span>
                   </div>
                 ))}
                 {dayAppointments.length > 3 && (

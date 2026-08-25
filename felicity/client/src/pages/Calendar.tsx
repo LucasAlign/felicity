@@ -36,6 +36,9 @@ export default function Calendar() {
   const [view, setView] = useState<ViewMode>("month");
   const [currentDate, setCurrentDate] = useState(new Date());
   const [quickAddOpen, setQuickAddOpen] = useState(false);
+  // The date the quick-add modal pre-fills. Driven by which day was clicked in
+  // the month grid (#3), falling back to the currently-viewed date otherwise.
+  const [quickAddDate, setQuickAddDate] = useState(new Date());
   const [editingAppointment, setEditingAppointment] =
     useState<Appointment | null>(null);
 
@@ -59,9 +62,13 @@ export default function Calendar() {
     else setCurrentDate((d) => addDays(d, 1));
   }
 
+  // Clicking a day opens the quick-add modal pre-filled with that date rather
+  // than dropping into day view (#3). Day view is still reachable via the
+  // Month/Week/Day switcher.
   function handleSelectDay(day: Date) {
-    setCurrentDate(day);
-    setView("day");
+    setEditingAppointment(null);
+    setQuickAddDate(day);
+    setQuickAddOpen(true);
   }
 
   function handleSelectAppointment(appointment: Appointment) {
@@ -121,6 +128,7 @@ export default function Calendar() {
           <button
             onClick={() => {
               setEditingAppointment(null);
+              setQuickAddDate(currentDate);
               setQuickAddOpen(true);
             }}
             className="rounded-lg bg-walnut-500 text-cream-50 px-4 py-1.5 text-sm shadow-soft hover:bg-walnut-600 transition-colors"
@@ -167,7 +175,7 @@ export default function Calendar() {
       <QuickAddDialog
         open={quickAddOpen}
         onClose={() => setQuickAddOpen(false)}
-        defaultDate={currentDate}
+        defaultDate={quickAddDate}
         editingAppointment={editingAppointment}
       />
     </div>

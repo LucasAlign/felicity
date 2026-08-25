@@ -11,6 +11,13 @@ const NAV_ITEMS = [
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
 
+  // The calendar runs edge-to-edge (#6): the grid wants every pixel of width,
+  // so it opts out of the centered max-width column other pages sit in.
+  const fullBleed = location === "/calendar";
+  const mainClass = fullBleed
+    ? "px-2 sm:px-4 py-6 pb-24 sm:pb-10"
+    : "max-w-5xl mx-auto px-4 sm:px-6 py-10 pb-24 sm:pb-10";
+
   return (
     <div className="min-h-screen">
       <header className="sticky top-0 z-30 backdrop-blur-md bg-white/75 border-b border-forest-100/70 shadow-[0_1px_0_rgba(255,255,255,0.5)_inset,0_6px_20px_-8px_rgba(47,74,60,0.12)]">
@@ -58,9 +65,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       </header>
 
-      <main className="max-w-5xl mx-auto px-4 sm:px-6 py-10 pb-24 sm:pb-10">
-        {children}
-      </main>
+      <main className={mainClass}>{children}</main>
 
       <nav
         className="sm:hidden fixed bottom-0 inset-x-0 z-40 flex items-stretch justify-around rounded-t-2xl bg-white/85 backdrop-blur-xl border-t border-forest-100/60 shadow-soft-up pb-[env(safe-area-inset-bottom)]"

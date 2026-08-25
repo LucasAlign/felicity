@@ -10,7 +10,7 @@ import {
 import {
   CalendarDays,
   type LucideIcon,
-  NotebookPen,
+  Mic,
   Plus,
   Sparkles,
   Sun,
@@ -294,13 +294,14 @@ export default function Dashboard() {
         </p>
       </div>
 
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <button
           onClick={() => setBrainDumpOpen(true)}
-          className="inline-flex items-center gap-2 rounded-xl bg-walnut-500 text-cream-50 px-6 py-3 shadow-soft hover:shadow-soft-md hover:bg-walnut-600 transition-all"
+          aria-label="Start a brain dump"
+          className="inline-flex items-center gap-2.5 rounded-2xl bg-forest-600 text-cream-50 px-10 py-5 text-xl font-medium shadow-soft-md hover:bg-forest-700 hover:shadow-soft-lg transition-all"
         >
-          <NotebookPen size={17} strokeWidth={2} />
-          Start a Brain Dump
+          <Mic size={24} strokeWidth={2} />
+          Start
         </button>
         <button
           onClick={() => setQuickAddOpen(true)}
