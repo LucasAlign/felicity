@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "wouter";
 import {
   Share,
   MoreVertical,
@@ -31,6 +32,13 @@ export default function Landing() {
         >
           Sign in to get started
         </a>
+
+        <Link
+          href="/about"
+          className="block text-sm text-forest-400 hover:text-forest-600 transition-colors"
+        >
+          See what Felicity can do &rarr;
+        </Link>
 
         <div className="text-left">
           <button

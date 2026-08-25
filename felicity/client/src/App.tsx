@@ -1,8 +1,9 @@
-import { Switch, Route } from "wouter";
+import { Switch, Route, useLocation } from "wouter";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/useAuth";
 import Landing from "@/pages/Landing";
+import About from "@/pages/About";
 import Onboarding from "@/pages/Onboarding";
 import Dashboard from "@/pages/Dashboard";
 import Calendar from "@/pages/Calendar";
@@ -10,7 +11,12 @@ import WhatIKnow from "@/pages/WhatIKnow";
 import AppShell from "@/components/AppShell";
 
 function Router() {
+  const [location] = useLocation();
   const { isAuthenticated, isLoading, user } = useAuth();
+
+  if (location === "/about") {
+    return <About />;
+  }
 
   if (isLoading) {
     return (
