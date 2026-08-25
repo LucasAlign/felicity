@@ -157,7 +157,11 @@ export interface IStorage {
     userId: string,
     id: number,
   ): Promise<Notification | undefined>;
-  deleteNotificationsForAppointment(appointmentId: number): Promise<void>;
+  replaceAppointmentReminders(
+    userId: string,
+    appointmentId: number,
+    rows: InsertNotification[],
+  ): Promise<void>;
 
   listMemories(userId: string): Promise<Memory[]>;
   findMemoryByPatternKey(
@@ -554,12 +558,30 @@ export class DatabaseStorage implements IStorage {
     return notification;
   }
 
-  async deleteNotificationsForAppointment(
+  // Atomically swap an appointment's reminders: clear the existing rows and
+  // insert the new set in a single transaction, so a failure can never leave
+  // the appointment with reminders half-deleted. Scoped by userId as
+  // defense-in-depth even though appointmentId is already user-owned.
+  async replaceAppointmentReminders(
+    userId: string,
     appointmentId: number,
+    rows: InsertNotification[],
   ): Promise<void> {
-    await db
-      .delete(notifications)
-      .where(eq(notifications.appointmentId, appointmentId));
+    await db.transaction(async (tx) => {
+      await tx
+        .delete(notifications)
+        .where(
+          and(
+            eq(notifications.appointmentId, appointmentId),
+            eq(notifications.userId, userId),
+          ),
+        );
+      if (rows.length > 0) {
+        await tx
+          .insert(notifications)
+          .values(rows.map((r) => ({ ...r, userId })));
+      }
+    });
   }
 
   async listMemories(userId: string): Promise<Memory[]> {

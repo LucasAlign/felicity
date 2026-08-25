@@ -36,9 +36,11 @@ export function useSubmitBrainDump() {
       transcript: string;
       inputMethod: "voice" | "manual" | "ocr_upload";
     }) =>
-      apiRequest("POST", "/api/brain-dump", data).then(
-        (r) => r.json() as Promise<BrainDumpResult>,
-      ),
+      apiRequest("POST", "/api/brain-dump", {
+        ...data,
+        // Let the server resolve "tomorrow at 9am" in the user's zone.
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      }).then((r) => r.json() as Promise<BrainDumpResult>),
     onSuccess: () => {
       for (const key of INVALIDATE_KEYS) {
         queryClient.invalidateQueries({ queryKey: key });

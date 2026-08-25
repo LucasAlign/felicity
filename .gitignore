@@ -1,0 +1,5 @@
+# The app and its own .gitignore live under felicity/. This root-level ignore
+# exists only because a local dev setup created node_modules/ and dist/ at the
+# repo root (outside the app folder); keep them out of commits.
+node_modules/
+dist/

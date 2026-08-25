@@ -1,4 +1,5 @@
 import { addDays, setHours, setMinutes, setSeconds, startOfDay } from "date-fns";
+import { fromZonedTime, toZonedTime } from "date-fns-tz";
 import { llmExtractionEngine, MIN_ACTIONABLE_CONFIDENCE } from "./llmExtraction";
 
 export interface ExtractedAppointment {
@@ -53,7 +54,10 @@ export interface ExtractionResult {
 // rule-based heuristic; swapping in an LLM-backed engine later only means
 // replacing the implementation assigned to `extractionEngine` below.
 export interface ExtractionEngine {
-  extract(transcript: string): Promise<ExtractionResult> | ExtractionResult;
+  extract(
+    transcript: string,
+    timeZone?: string,
+  ): Promise<ExtractionResult> | ExtractionResult;
 }
 
 const DAY_NAMES = [
@@ -69,7 +73,9 @@ const DAY_NAMES = [
 function nextDayOfWeek(from: Date, targetDay: number): Date {
   const currentDay = from.getDay();
   let diff = targetDay - currentDay;
-  if (diff <= 0) diff += 7;
+  // Allow "same day": saying "Thursday" on a Thursday means today, not next
+  // week. Only roll forward when the target has already passed this week.
+  if (diff < 0) diff += 7;
   return addDays(from, diff);
 }
 
@@ -150,8 +156,17 @@ function cleanTitle(segment: string): string {
   return segment.replace(/^(and|so|also|then)\s+/i, "").trim();
 }
 
-function ruleBasedExtract(transcript: string): ExtractionResult {
-  const now = new Date();
+function ruleBasedExtract(
+  transcript: string,
+  timeZone?: string,
+): ExtractionResult {
+  // Resolve relative dates ("tomorrow", "Thursday 9am") in the user's wall
+  // clock, not the server's. `now` is the user-local time; date math runs on
+  // it, then `toUtc` converts the wall-clock result back to a real UTC instant
+  // for storage. Falls back to the server zone when the client didn't send one.
+  const tz = timeZone || Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const now = toZonedTime(new Date(), tz);
+  const toUtc = (d: Date) => fromZonedTime(d, tz);
   const segments = splitIntoSegments(transcript);
 
   const result: ExtractionResult = {
@@ -193,7 +208,7 @@ function ruleBasedExtract(transcript: string): ExtractionResult {
         const date = parseDateHint(segment, now);
         result.appointments.push({
           title: segment,
-          startTime: date ?? addDays(startOfDay(now), 1),
+          startTime: toUtc(date ?? addDays(startOfDay(now), 1)),
           allDay: !date,
           confidence: date ? 0.65 : 0.4,
           reasoning: date
@@ -206,7 +221,7 @@ function ruleBasedExtract(transcript: string): ExtractionResult {
         const date = parseDateHint(segment, now);
         result.tasks.push({
           title: segment,
-          dueDate: date,
+          dueDate: date ? toUtc(date) : null,
           confidence: 0.55,
           reasoning: 'Phrased as something to do ("need to", "should", ...).',
         });
@@ -272,13 +287,13 @@ function applyConfidenceGuardrail(result: ExtractionResult): ExtractionResult {
 // fall back to the rule-based engine rather than failing the Brain Dump
 // request outright.
 export const extractionEngine: ExtractionEngine = {
-  async extract(transcript: string) {
+  async extract(transcript: string, timeZone?: string) {
     let result: ExtractionResult;
     try {
-      result = await llmExtractionEngine.extract(transcript);
+      result = await llmExtractionEngine.extract(transcript, timeZone);
     } catch (err) {
       console.error("LLM extraction failed, falling back to rule-based:", err);
-      result = ruleBasedExtract(transcript);
+      result = ruleBasedExtract(transcript, timeZone);
     }
     return applyConfidenceGuardrail(result);
   },

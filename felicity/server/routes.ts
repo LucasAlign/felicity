@@ -1,4 +1,4 @@
-import type { Express } from "express";
+import type { Express, RequestHandler } from "express";
 import { createServer, type Server } from "http";
 import multer from "multer";
 import { setupAuth, isAuthenticated } from "./replitAuth";
@@ -47,13 +47,69 @@ const onboardingAnswerSchema = z.object({
 const brainDumpRequestSchema = z.object({
   transcript: z.string().min(1),
   inputMethod: z.enum(["voice", "manual", "ocr_upload"]).default("voice"),
+  // IANA timezone (e.g. "America/Chicago") so "tomorrow at 9am" resolves in
+  // the user's local time rather than the server's. Optional for older
+  // clients; the extractor falls back to the server zone if absent.
+  timeZone: z.string().optional(),
 });
 
+// A malformed / non-numeric ":id" route param must never reach the DB — a bare
+// Number("abc") is NaN, which Postgres rejects as `invalid input syntax for
+// integer`. Throw a 400 (caught by the error middleware via
+// express-async-errors) so callers get a clean error instead of a 500/hang.
+class HttpError extends Error {
+  constructor(public status: number, message: string) {
+    super(message);
+  }
+}
+
+function parseId(raw: string): number {
+  const id = Number(raw);
+  if (!Number.isInteger(id) || id <= 0) {
+    throw new HttpError(400, "Invalid id");
+  }
+  return id;
+}
+
+// Minimal in-memory, per-user rate limiter. Enough to blunt abuse of the
+// expensive endpoints (OCR, brain-dump) on a single instance; swap for a
+// shared store (e.g. Redis) if the app is ever scaled horizontally.
+function rateLimit(opts: { windowMs: number; max: number }): RequestHandler {
+  const hits = new Map<string, { count: number; resetAt: number }>();
+  return (req: any, res, next) => {
+    const key = req.user?.claims?.sub ?? req.ip;
+    const now = Date.now();
+    const entry = hits.get(key);
+    if (!entry || entry.resetAt <= now) {
+      hits.set(key, { count: 1, resetAt: now + opts.windowMs });
+      return next();
+    }
+    if (entry.count >= opts.max) {
+      const retryAfter = Math.ceil((entry.resetAt - now) / 1000);
+      res.setHeader("Retry-After", String(retryAfter));
+      return res
+        .status(429)
+        .json({ message: "Too many requests — please slow down." });
+    }
+    entry.count += 1;
+    next();
+  };
+}
+
+const ocrRateLimit = rateLimit({ windowMs: 60_000, max: 20 });
+const brainDumpRateLimit = rateLimit({ windowMs: 60_000, max: 30 });
+
 // Images are OCR'd in memory and discarded — nothing is written to disk,
-// so there's no upload directory to manage or clean up.
+// so there's no upload directory to manage or clean up. Only real image
+// uploads are accepted, and size is capped so a single request can't exhaust
+// memory before the OCR concurrency gate (see server/ocr.ts) even sees it.
 const imageUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (file.mimetype.startsWith("image/")) return cb(null, true);
+    cb(new HttpError(400, "Only image uploads are accepted."));
+  },
 });
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -90,7 +146,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.patch("/api/appointments/:id", isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id);
     const parsed = insertAppointmentSchema.partial().safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({ message: parsed.error.message });
@@ -105,7 +161,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.delete("/api/appointments/:id", isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id);
     const appointment = await storage.getAppointment(userId, id);
     if (!appointment) return res.status(404).json({ message: "Not found" });
     await deleteAppointmentFromGoogle(userId, appointment);
@@ -132,7 +188,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.patch("/api/tasks/:id", isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id);
     const parsed = insertTaskSchema.partial().safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({ message: parsed.error.message });
@@ -144,7 +200,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.delete("/api/tasks/:id", isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id);
     const deleted = await storage.deleteTask(userId, id);
     if (!deleted) return res.status(404).json({ message: "Not found" });
     res.status(204).end();
@@ -166,7 +222,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(400).json({ message: parsed.error.message });
     const note = await storage.updateNote(
       req.user.claims.sub,
-      Number(req.params.id),
+      parseId(req.params.id),
       parsed.data,
     );
     if (!note) return res.status(404).json({ message: "Not found" });
@@ -175,7 +231,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete("/api/notes/:id", isAuthenticated, async (req: any, res) => {
     const deleted = await storage.deleteNote(
       req.user.claims.sub,
-      Number(req.params.id),
+      parseId(req.params.id),
     );
     if (!deleted) return res.status(404).json({ message: "Not found" });
     res.status(204).end();
@@ -197,7 +253,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(400).json({ message: parsed.error.message });
     const idea = await storage.updateIdea(
       req.user.claims.sub,
-      Number(req.params.id),
+      parseId(req.params.id),
       parsed.data,
     );
     if (!idea) return res.status(404).json({ message: "Not found" });
@@ -206,7 +262,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete("/api/ideas/:id", isAuthenticated, async (req: any, res) => {
     const deleted = await storage.deleteIdea(
       req.user.claims.sub,
-      Number(req.params.id),
+      parseId(req.params.id),
     );
     if (!deleted) return res.status(404).json({ message: "Not found" });
     res.status(204).end();
@@ -233,7 +289,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: parsed.error.message });
       const item = await storage.updateShoppingItem(
         req.user.claims.sub,
-        Number(req.params.id),
+        parseId(req.params.id),
         parsed.data,
       );
       if (!item) return res.status(404).json({ message: "Not found" });
@@ -246,7 +302,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     async (req: any, res) => {
       const deleted = await storage.deleteShoppingItem(
         req.user.claims.sub,
-        Number(req.params.id),
+        parseId(req.params.id),
       );
       if (!deleted) return res.status(404).json({ message: "Not found" });
       res.status(204).end();
@@ -274,7 +330,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: parsed.error.message });
       const request = await storage.updatePrayerRequest(
         req.user.claims.sub,
-        Number(req.params.id),
+        parseId(req.params.id),
         parsed.data,
       );
       if (!request) return res.status(404).json({ message: "Not found" });
@@ -287,7 +343,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     async (req: any, res) => {
       const deleted = await storage.deletePrayerRequest(
         req.user.claims.sub,
-        Number(req.params.id),
+        parseId(req.params.id),
       );
       if (!deleted) return res.status(404).json({ message: "Not found" });
       res.status(204).end();
@@ -301,6 +357,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post(
     "/api/ocr-upload",
     isAuthenticated,
+    ocrRateLimit,
     imageUpload.single("image"),
     async (req: any, res) => {
       if (!req.file) {
@@ -326,19 +383,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(await storage.listBrainDumps(req.user.claims.sub));
   });
 
-  app.post("/api/brain-dump", isAuthenticated, async (req: any, res) => {
+  app.post("/api/brain-dump", isAuthenticated, brainDumpRateLimit, async (req: any, res) => {
     const parsed = brainDumpRequestSchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({ message: parsed.error.message });
     }
     const userId = req.user.claims.sub;
-    const { transcript, inputMethod } = parsed.data;
+    const { transcript, inputMethod, timeZone } = parsed.data;
 
     // "voice"/"manual" both came through the Brain Dump conversation flow;
     // "ocr_upload" is a distinct provenance per the item source enum.
     const source = inputMethod === "ocr_upload" ? "ocr_upload" : "brain_dump";
 
-    const extracted = await extractionEngine.extract(transcript);
+    const extracted = await extractionEngine.extract(transcript, timeZone);
 
     const [createdAppointments, createdTasks, createdNotes, createdIdeas, createdShoppingItems, createdPrayerRequests] =
       await Promise.all([
@@ -453,7 +510,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     async (req: any, res) => {
       const notification = await storage.dismissNotification(
         req.user.claims.sub,
-        Number(req.params.id),
+        parseId(req.params.id),
       );
       if (!notification) return res.status(404).json({ message: "Not found" });
       res.json(notification);
@@ -498,7 +555,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(400).json({ message: parsed.error.message });
     const memory = await storage.updateMemory(
       req.user.claims.sub,
-      Number(req.params.id),
+      parseId(req.params.id),
       parsed.data,
     );
     if (!memory) return res.status(404).json({ message: "Not found" });
@@ -514,7 +571,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: parsed.error.message });
       const memory = await storage.respondToMemory(
         req.user.claims.sub,
-        Number(req.params.id),
+        parseId(req.params.id),
         parsed.data.response,
       );
       if (!memory) return res.status(404).json({ message: "Not found" });
@@ -525,7 +582,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete("/api/memories/:id", isAuthenticated, async (req: any, res) => {
     const deleted = await storage.deleteMemory(
       req.user.claims.sub,
-      Number(req.params.id),
+      parseId(req.params.id),
     );
     if (!deleted) return res.status(404).json({ message: "Not found" });
     res.status(204).end();

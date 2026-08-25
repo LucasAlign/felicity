@@ -207,13 +207,28 @@ async function runExtractionCall(
   return JSON.parse(content) as RawExtraction;
 }
 
-async function llmExtract(transcript: string): Promise<ExtractionResult> {
+async function llmExtract(
+  transcript: string,
+  timeZone?: string,
+): Promise<ExtractionResult> {
   const now = new Date();
-  const nowIso = now.toISOString();
+  // Give the model the current time as the user's local wall clock plus the
+  // IANA zone, so "tomorrow at 9am" resolves against the user's day, not UTC.
+  // We ask it to return offset-aware ISO 8601, which `new Date(...)` then
+  // parses to the correct instant.
+  const tz = timeZone || Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const localNow = new Intl.DateTimeFormat("en-CA", {
+    timeZone: tz,
+    dateStyle: "full",
+    timeStyle: "long",
+  }).format(now);
+  const dateContext =
+    `Current date/time: ${localNow} (timezone ${tz}). ` +
+    `Interpret all relative dates/times in this timezone and return ISO 8601 timestamps that include the UTC offset.`;
 
   const draft = await runExtractionCall(
     SYSTEM_PROMPT,
-    `Current date/time: ${nowIso}\n\nBrain dump transcript:\n"""\n${transcript}\n"""`,
+    `${dateContext}\n\nBrain dump transcript:\n"""\n${transcript}\n"""`,
   );
 
   // Second pass: re-check the draft against the source transcript so
@@ -221,7 +236,7 @@ async function llmExtract(transcript: string): Promise<ExtractionResult> {
   // prompt costing us real items it should have kept.
   const refined = await runExtractionCall(
     VERIFY_SYSTEM_PROMPT,
-    `Current date/time: ${nowIso}\n\nOriginal transcript:\n"""\n${transcript}\n"""\n\nDraft extraction:\n${JSON.stringify(draft)}`,
+    `${dateContext}\n\nOriginal transcript:\n"""\n${transcript}\n"""\n\nDraft extraction:\n${JSON.stringify(draft)}`,
   );
 
   return toExtractionResult(refined);

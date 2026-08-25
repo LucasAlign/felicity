@@ -1,3 +1,4 @@
+import "express-async-errors";
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
@@ -13,25 +14,14 @@ app.use(express.urlencoded({ extended: false }));
 app.use((req, res, next) => {
   const start = Date.now();
   const reqPath = req.path;
-  let capturedJsonResponse: Record<string, any> | undefined;
 
-  const originalResJson = res.json;
-  res.json = function (bodyJson, ...args) {
-    capturedJsonResponse = bodyJson;
-    return originalResJson.apply(res, [bodyJson, ...args]);
-  };
-
+  // Log only method/path/status/timing — never the response body. Bodies
+  // contain user PII (tasks, appointments, memories) that shouldn't land in
+  // server logs.
   res.on("finish", () => {
     const duration = Date.now() - start;
     if (reqPath.startsWith("/api")) {
-      let logLine = `${req.method} ${reqPath} ${res.statusCode} in ${duration}ms`;
-      if (capturedJsonResponse) {
-        logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
-      }
-      if (logLine.length > 80) {
-        logLine = logLine.slice(0, 79) + "…";
-      }
-      log(logLine);
+      log(`${req.method} ${reqPath} ${res.statusCode} in ${duration}ms`);
     }
   });
 
