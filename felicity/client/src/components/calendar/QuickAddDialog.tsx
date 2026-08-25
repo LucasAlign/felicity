@@ -7,6 +7,8 @@ import {
   useUpdateAppointment,
 } from "@/hooks/useAppointments";
 import { useCreateTask } from "@/hooks/useTasks";
+import { useCategories } from "@/hooks/useCategories";
+import { colorForCategory } from "@/lib/categories";
 
 type EntryType = "appointment" | "task";
 
@@ -36,7 +38,9 @@ export default function QuickAddDialog({
   const [endTime, setEndTime] = useState("");
   const [allDay, setAllDay] = useState(false);
   const [location, setLocation] = useState("");
+  const [categoryId, setCategoryId] = useState<number | null>(null);
 
+  const { data: categories = [] } = useCategories();
   const createAppointment = useCreateAppointment();
   const updateAppointment = useUpdateAppointment();
   const deleteAppointment = useDeleteAppointment();
@@ -57,6 +61,7 @@ export default function QuickAddDialog({
       );
       setAllDay(editingAppointment.allDay);
       setLocation(editingAppointment.location ?? "");
+      setCategoryId(editingAppointment.categoryId ?? null);
     } else {
       setEntryType("appointment");
       setTitle("");
@@ -65,6 +70,7 @@ export default function QuickAddDialog({
       setEndTime("");
       setAllDay(false);
       setLocation("");
+      setCategoryId(null);
     }
   }, [open, editingAppointment, defaultDate]);
 
@@ -80,6 +86,7 @@ export default function QuickAddDialog({
       await createTask.mutateAsync({
         title,
         dueDate: date ? new Date(date) : null,
+        categoryId,
         source: "manual_entry",
       } as any);
       onClose();
@@ -97,6 +104,7 @@ export default function QuickAddDialog({
       endTime: endDateTime,
       allDay,
       location: location || null,
+      categoryId,
       source: "manual_entry" as const,
     };
 
@@ -156,6 +164,32 @@ export default function QuickAddDialog({
               }
               required
             />
+          </div>
+
+          <div>
+            <label className="block text-sm text-forest-500 mb-1">Category</label>
+            <div className="flex items-center gap-2">
+              <span
+                className="inline-block h-4 w-4 rounded-full border border-forest-100 shrink-0"
+                style={{ backgroundColor: colorForCategory(categoryId, categories) }}
+                aria-hidden="true"
+              />
+              <select
+                value={categoryId ?? ""}
+                onChange={(e) =>
+                  setCategoryId(e.target.value ? Number(e.target.value) : null)
+                }
+                className="flex-1 rounded-lg border border-forest-100 px-3 py-2 bg-white/80 text-forest-700"
+              >
+                <option value="">Unassigned</option>
+                {categories.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.parentId ? "— " : ""}
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
 
           <div>

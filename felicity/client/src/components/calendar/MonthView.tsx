@@ -10,6 +10,8 @@ import {
   startOfWeek,
 } from "date-fns";
 import type { Appointment } from "@shared/schema";
+import { useCategories } from "@/hooks/useCategories";
+import { colorForCategory } from "@/lib/categories";
 
 const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -22,6 +24,7 @@ export default function MonthView({
   appointments: Appointment[];
   onSelectDay: (day: Date) => void;
 }) {
+  const { data: categories = [] } = useCategories();
   const gridStart = startOfWeek(startOfMonth(currentDate));
   const gridEnd = endOfWeek(endOfMonth(currentDate));
   const days = eachDayOfInterval({ start: gridStart, end: gridEnd });
@@ -77,6 +80,13 @@ export default function MonthView({
                           : undefined
                     }
                   >
+                    <span
+                      className="mr-1 inline-block h-2 w-2 shrink-0 rounded-full align-middle"
+                      style={{
+                        backgroundColor: colorForCategory(a.categoryId, categories),
+                      }}
+                      aria-hidden="true"
+                    />
                     {a.source === "google_calendar" && (
                       <span className="text-forest-400">●&nbsp;</span>
                     )}

@@ -1,6 +1,8 @@
 import { format, isSameDay, isToday } from "date-fns";
 import type { Appointment } from "@shared/schema";
 import { GRID_HOURS, HOUR_HEIGHT, formatHour, timeGridStyle } from "@/lib/calendar";
+import { useCategories } from "@/hooks/useCategories";
+import { colorForCategory } from "@/lib/categories";
 
 export default function TimeGrid({
   days,
@@ -11,6 +13,7 @@ export default function TimeGrid({
   appointments: Appointment[];
   onSelectAppointment: (appointment: Appointment) => void;
 }) {
+  const { data: categories = [] } = useCategories();
   const allDayAppointments = appointments.filter((a) => a.allDay);
   const timedAppointments = appointments.filter((a) => !a.allDay);
 
@@ -62,6 +65,13 @@ export default function TimeGrid({
                         : undefined
                     }
                   >
+                    <span
+                      className="mr-1 inline-block h-2 w-2 shrink-0 rounded-full align-middle"
+                      style={{
+                        backgroundColor: colorForCategory(a.categoryId, categories),
+                      }}
+                      aria-hidden="true"
+                    />
                     {a.source === "google_calendar" && "● "}
                     {a.title}
                   </button>
@@ -121,6 +131,16 @@ export default function TimeGrid({
                       }
                     >
                       <div className="font-medium truncate">
+                        <span
+                          className="mr-1 inline-block h-2 w-2 shrink-0 rounded-full align-middle ring-1 ring-white/60"
+                          style={{
+                            backgroundColor: colorForCategory(
+                              a.categoryId,
+                              categories,
+                            ),
+                          }}
+                          aria-hidden="true"
+                        />
                         {a.source === "google_calendar" && "● "}
                         {a.title}
                       </div>

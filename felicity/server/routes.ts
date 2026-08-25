@@ -11,6 +11,7 @@ import {
   insertShoppingItemSchema,
   insertPrayerRequestSchema,
   insertMemorySchema,
+  insertCategorySchema,
   memoryCategoryEnum,
 } from "@shared/schema";
 import { extractionEngine } from "./extraction";
@@ -119,6 +120,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const userId = req.user.claims.sub;
     const user = await storage.getUser(userId);
     res.json(user);
+  });
+
+  // Categories — color-coded labels for appointments/tasks. The GET lazily
+  // seeds the default set the first time a user has none, so a fresh account
+  // always sees the standard colors without a separate onboarding step.
+  app.get("/api/categories", isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const categories = await storage.ensureDefaultCategories(userId);
+    res.json(categories);
+  });
+
+  app.post("/api/categories", isAuthenticated, async (req: any, res) => {
+    const parsed = insertCategorySchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.message });
+    }
+    res
+      .status(201)
+      .json(await storage.createCategory(req.user.claims.sub, parsed.data));
+  });
+
+  app.patch("/api/categories/:id", isAuthenticated, async (req: any, res) => {
+    const parsed = insertCategorySchema.partial().safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.message });
+    }
+    const category = await storage.updateCategory(
+      req.user.claims.sub,
+      parseId(req.params.id),
+      parsed.data,
+    );
+    if (!category) return res.status(404).json({ message: "Not found" });
+    res.json(category);
+  });
+
+  app.delete("/api/categories/:id", isAuthenticated, async (req: any, res) => {
+    const deleted = await storage.deleteCategory(
+      req.user.claims.sub,
+      parseId(req.params.id),
+    );
+    if (!deleted) return res.status(404).json({ message: "Not found" });
+    res.status(204).end();
   });
 
   // Appointments — fixed date/time, protected, never moved without permission.

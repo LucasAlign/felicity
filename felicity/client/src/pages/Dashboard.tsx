@@ -21,6 +21,8 @@ import {
   useDeleteAppointment,
 } from "@/hooks/useAppointments";
 import { useDeleteTask, useTasks, useUpdateTask } from "@/hooks/useTasks";
+import { useCategories } from "@/hooks/useCategories";
+import { colorForCategory } from "@/lib/categories";
 import QuickAddDialog from "@/components/calendar/QuickAddDialog";
 import BrainDumpDialog from "@/components/braindump/BrainDumpDialog";
 import { getVerseOfTheDay } from "@/lib/bibleVerses";
@@ -74,6 +76,7 @@ function buildEntries(
 function TaskEntryRow({ task }: { task: Task }) {
   const updateTask = useUpdateTask();
   const deleteTask = useDeleteTask();
+  const { data: categories = [] } = useCategories();
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(task.title);
 
@@ -124,7 +127,10 @@ function TaskEntryRow({ task }: { task: Task }) {
           </div>
         )}
         <div className="flex items-center gap-1.5 mt-0.5">
-          <span className="inline-block h-1.5 w-1.5 rounded-full bg-forest-300" />
+          <span
+            className="inline-block h-1.5 w-1.5 rounded-full"
+            style={{ backgroundColor: colorForCategory(task.categoryId, categories) }}
+          />
           <span className="text-xs text-forest-300">
             {task.dueDate
               ? `Due ${format(new Date(task.dueDate), "EEE, MMM d")}`
@@ -151,6 +157,7 @@ function AppointmentEntryRow({
   onEdit: (appointment: Appointment) => void;
 }) {
   const deleteAppointment = useDeleteAppointment();
+  const { data: categories = [] } = useCategories();
 
   return (
     <li className="flex items-start gap-3 -mx-3 px-3 py-3 rounded-xl transition-all hover:bg-white/80 hover:shadow-soft group">
@@ -160,7 +167,12 @@ function AppointmentEntryRow({
       >
         <div className="text-sm text-forest-700 truncate">{appointment.title}</div>
         <div className="flex items-center gap-1.5 mt-0.5">
-          <span className="inline-block h-1.5 w-1.5 rounded-full bg-haze-400" />
+          <span
+            className="inline-block h-1.5 w-1.5 rounded-full"
+            style={{
+              backgroundColor: colorForCategory(appointment.categoryId, categories),
+            }}
+          />
           <span className="text-xs text-forest-300">
             {appointment.allDay
               ? "All day"

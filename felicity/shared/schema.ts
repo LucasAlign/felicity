@@ -10,6 +10,7 @@ import {
   text,
   timestamp,
   varchar,
+  type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -64,6 +65,45 @@ export const appointmentSyncStatusEnum = pgEnum("appointment_sync_status", [
   "conflict",
 ]);
 
+// Color-coded categories for appointments/tasks (people, contexts, ministries).
+// Per-user and editable; a fixed set is seeded on first use (see
+// storage.ensureDefaultCategories). `color` is a hex string rendered inline so
+// the UI needs no color-name → class lookup. `parentId` is a self-reference
+// enabling sub-categories (e.g. KeyFam / Twigs nested under Ministries). An
+// item with no category (categoryId = null) is treated as "Unassigned".
+export const categories = pgTable("categories", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id")
+    .notNull()
+    .references(() => users.id),
+  name: varchar("name").notNull(),
+  color: varchar("color").notNull(),
+  parentId: integer("parent_id").references((): AnyPgColumn => categories.id, {
+    onDelete: "cascade",
+  }),
+  // Ordering hint for display; lower sorts first.
+  sortOrder: integer("sort_order").notNull().default(0),
+  // Marks the seeded defaults so they can be distinguished from user-created
+  // ones (and re-seeding can be made idempotent).
+  isDefault: boolean("is_default").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertCategorySchema = createInsertSchema(categories, {
+  color: z
+    .string()
+    .regex(/^#[0-9a-fA-F]{6}$/, "color must be a #rrggbb hex string"),
+}).omit({
+  id: true,
+  userId: true,
+  isDefault: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type InsertCategory = z.infer<typeof insertCategorySchema>;
+export type Category = typeof categories.$inferSelect;
+
 export const appointments = pgTable("appointments", {
   id: serial("id").primaryKey(),
   userId: varchar("user_id")
@@ -75,6 +115,10 @@ export const appointments = pgTable("appointments", {
   startTime: timestamp("start_time").notNull(),
   endTime: timestamp("end_time"),
   allDay: boolean("all_day").notNull().default(false),
+  // Optional color-coding; null = "Unassigned" (rendered teal).
+  categoryId: integer("category_id").references(() => categories.id, {
+    onDelete: "set null",
+  }),
   source: itemSourceEnum("source").notNull().default("manual_entry"),
   confidence: real("confidence"),
   aiReasoning: text("ai_reasoning"),
@@ -118,6 +162,14 @@ export const tasks = pgTable("tasks", {
   // Optional and unscheduled by default; the AI may suggest a placement but never fixes it.
   dueDate: timestamp("due_date"),
   completed: boolean("completed").notNull().default(false),
+  // When the task was marked complete. Drives the "cross off, keep visible for
+  // 12h, then archive" behavior — a completed task older than 12h is hidden
+  // from the active list. Null whenever `completed` is false.
+  completedAt: timestamp("completed_at"),
+  // Optional color-coding; null = "Unassigned" (rendered teal).
+  categoryId: integer("category_id").references(() => categories.id, {
+    onDelete: "set null",
+  }),
   source: itemSourceEnum("source").notNull().default("manual_entry"),
   confidence: real("confidence"),
   aiReasoning: text("ai_reasoning"),
@@ -127,7 +179,15 @@ export const tasks = pgTable("tasks", {
 
 export const insertTaskSchema = createInsertSchema(tasks, {
   dueDate: z.coerce.date().nullish(),
-}).omit({ id: true, userId: true, createdAt: true, updatedAt: true });
+}).omit({
+  id: true,
+  userId: true,
+  // completedAt is derived server-side from the `completed` flag, never set
+  // directly by clients.
+  completedAt: true,
+  createdAt: true,
+  updatedAt: true,
+});
 export type InsertTask = z.infer<typeof insertTaskSchema>;
 export type Task = typeof tasks.$inferSelect;
 

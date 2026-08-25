@@ -9,7 +9,10 @@ import {
   brainDumps,
   notifications,
   memories,
+  categories,
   googleCalendarConnections,
+  type Category,
+  type InsertCategory,
   type MemoryCategory,
   type User,
   type UpsertUser,
@@ -34,7 +37,22 @@ import {
   type GoogleCalendarConnection,
 } from "@shared/schema";
 import { db } from "./db";
-import { and, desc, eq, isNull, lte } from "drizzle-orm";
+import { and, asc, desc, eq, isNull, lte } from "drizzle-orm";
+
+// The color-coded categories seeded for every user on first use. Colors are
+// hex strings rendered inline by the client. KeyFam / Twigs are nested under
+// Ministries via `parent`. "Unassigned" is intentionally absent — a null
+// categoryId represents it (rendered teal client-side).
+type DefaultCategory = { name: string; color: string; children?: string[] };
+const DEFAULT_CATEGORIES: DefaultCategory[] = [
+  { name: "Work", color: "#16a34a" },
+  { name: "Daphne", color: "#ea580c" },
+  { name: "Sarah", color: "#db2777" },
+  { name: "Winston", color: "#dc2626" },
+  { name: "Mariah", color: "#2563eb" },
+  { name: "Ministries", color: "#ca8a04", children: ["KeyFam", "Twigs"] },
+  { name: "Margin", color: "#a78bfa" },
+];
 
 type AppointmentSyncState = {
   externalId?: string | null;
@@ -53,6 +71,16 @@ export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
   upsertUser(user: UpsertUser): Promise<User>;
   completeOnboarding(userId: string): Promise<User>;
+
+  listCategories(userId: string): Promise<Category[]>;
+  createCategory(userId: string, data: InsertCategory): Promise<Category>;
+  updateCategory(
+    userId: string,
+    id: number,
+    data: Partial<InsertCategory>,
+  ): Promise<Category | undefined>;
+  deleteCategory(userId: string, id: number): Promise<boolean>;
+  ensureDefaultCategories(userId: string): Promise<Category[]>;
 
   listAppointments(userId: string): Promise<Appointment[]>;
   getAppointment(userId: string, id: number): Promise<Appointment | undefined>;
@@ -219,6 +247,83 @@ export class DatabaseStorage implements IStorage {
     return user;
   }
 
+  async listCategories(userId: string): Promise<Category[]> {
+    return db
+      .select()
+      .from(categories)
+      .where(eq(categories.userId, userId))
+      .orderBy(asc(categories.sortOrder), asc(categories.id));
+  }
+
+  async createCategory(
+    userId: string,
+    data: InsertCategory,
+  ): Promise<Category> {
+    const [category] = await db
+      .insert(categories)
+      .values({ ...data, userId })
+      .returning();
+    return category;
+  }
+
+  async updateCategory(
+    userId: string,
+    id: number,
+    data: Partial<InsertCategory>,
+  ): Promise<Category | undefined> {
+    const [category] = await db
+      .update(categories)
+      .set({ ...data, updatedAt: new Date() })
+      .where(and(eq(categories.id, id), eq(categories.userId, userId)))
+      .returning();
+    return category;
+  }
+
+  async deleteCategory(userId: string, id: number): Promise<boolean> {
+    const result = await db
+      .delete(categories)
+      .where(and(eq(categories.id, id), eq(categories.userId, userId)))
+      .returning({ id: categories.id });
+    return result.length > 0;
+  }
+
+  // Seed the fixed default categories the first time a user needs them, then
+  // return the full set. Idempotent: if the user already has any categories,
+  // it's a no-op read. Parents are inserted before children so the child's
+  // parentId can point at a real row.
+  async ensureDefaultCategories(userId: string): Promise<Category[]> {
+    const existing = await this.listCategories(userId);
+    if (existing.length > 0) return existing;
+
+    await db.transaction(async (tx) => {
+      let order = 0;
+      for (const def of DEFAULT_CATEGORIES) {
+        const [parent] = await tx
+          .insert(categories)
+          .values({
+            userId,
+            name: def.name,
+            color: def.color,
+            sortOrder: order++,
+            isDefault: true,
+          })
+          .returning();
+        for (const childName of def.children ?? []) {
+          await tx.insert(categories).values({
+            userId,
+            name: childName,
+            color: def.color,
+            parentId: parent.id,
+            sortOrder: order++,
+            isDefault: true,
+          });
+        }
+      }
+    });
+
+    return this.listCategories(userId);
+  }
+
   async listAppointments(userId: string): Promise<Appointment[]> {
     return db
       .select()
@@ -316,9 +421,24 @@ export class DatabaseStorage implements IStorage {
     id: number,
     data: Partial<InsertTask>,
   ): Promise<Task | undefined> {
+    // Keep completedAt in lockstep with the completed flag: stamp it when a
+    // task is marked done (drives the 12h "keep visible then archive" window)
+    // and clear it if the task is reopened. Only touched when `completed` is
+    // part of this update.
+    const completedAt =
+      data.completed === true
+        ? new Date()
+        : data.completed === false
+          ? null
+          : undefined;
+
     const [task] = await db
       .update(tasks)
-      .set({ ...data, updatedAt: new Date() })
+      .set({
+        ...data,
+        ...(completedAt !== undefined ? { completedAt } : {}),
+        updatedAt: new Date(),
+      })
       .where(and(eq(tasks.id, id), eq(tasks.userId, userId)))
       .returning();
     return task;
