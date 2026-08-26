@@ -11,9 +11,12 @@ import {
   notifications,
   memories,
   categories,
+  projects,
   googleCalendarConnections,
   type Category,
   type InsertCategory,
+  type Project,
+  type InsertProject,
   type MemoryCategory,
   type User,
   type UpsertUser,
@@ -74,6 +77,15 @@ export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
   upsertUser(user: UpsertUser): Promise<User>;
   completeOnboarding(userId: string): Promise<User>;
+
+  listProjects(userId: string): Promise<Project[]>;
+  createProject(userId: string, data: InsertProject): Promise<Project>;
+  updateProject(
+    userId: string,
+    id: number,
+    data: Partial<InsertProject>,
+  ): Promise<Project | undefined>;
+  deleteProject(userId: string, id: number): Promise<boolean>;
 
   listCategories(userId: string): Promise<Category[]>;
   createCategory(userId: string, data: InsertCategory): Promise<Category>;
@@ -260,6 +272,43 @@ export class DatabaseStorage implements IStorage {
       .where(eq(users.id, userId))
       .returning();
     return user;
+  }
+
+  async listProjects(userId: string): Promise<Project[]> {
+    return db
+      .select()
+      .from(projects)
+      .where(eq(projects.userId, userId))
+      .orderBy(asc(projects.sortOrder), asc(projects.id));
+  }
+
+  async createProject(userId: string, data: InsertProject): Promise<Project> {
+    const [project] = await db
+      .insert(projects)
+      .values({ ...data, userId })
+      .returning();
+    return project;
+  }
+
+  async updateProject(
+    userId: string,
+    id: number,
+    data: Partial<InsertProject>,
+  ): Promise<Project | undefined> {
+    const [project] = await db
+      .update(projects)
+      .set({ ...data, updatedAt: new Date() })
+      .where(and(eq(projects.id, id), eq(projects.userId, userId)))
+      .returning();
+    return project;
+  }
+
+  async deleteProject(userId: string, id: number): Promise<boolean> {
+    const result = await db
+      .delete(projects)
+      .where(and(eq(projects.id, id), eq(projects.userId, userId)))
+      .returning({ id: projects.id });
+    return result.length > 0;
   }
 
   async listCategories(userId: string): Promise<Category[]> {

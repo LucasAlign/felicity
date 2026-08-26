@@ -1,10 +1,18 @@
 import { Link, useLocation } from "wouter";
-import { Home, Calendar, BookOpen, Leaf, LogOut } from "lucide-react";
+import {
+  Home,
+  Calendar,
+  BookOpen,
+  FolderKanban,
+  Leaf,
+  LogOut,
+} from "lucide-react";
 import NotificationBell from "@/components/NotificationBell";
 
 const NAV_ITEMS = [
   { href: "/", label: "Dashboard", icon: Home },
   { href: "/calendar", label: "Calendar", icon: Calendar },
+  { href: "/projects", label: "Projects", icon: FolderKanban },
   { href: "/what-i-know", label: "What I Know", icon: BookOpen },
 ];
 

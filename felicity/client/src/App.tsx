@@ -7,6 +7,7 @@ import About from "@/pages/About";
 import Onboarding from "@/pages/Onboarding";
 import Dashboard from "@/pages/Dashboard";
 import Calendar from "@/pages/Calendar";
+import Projects from "@/pages/Projects";
 import WhatIKnow from "@/pages/WhatIKnow";
 import AppShell from "@/components/AppShell";
 
@@ -39,6 +40,7 @@ function Router() {
       <Switch>
         <Route path="/" component={Dashboard} />
         <Route path="/calendar" component={Calendar} />
+        <Route path="/projects" component={Projects} />
         <Route path="/what-i-know" component={WhatIKnow} />
         <Route>
           <div className="text-forest-400">Page not found.</div>

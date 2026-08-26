@@ -12,6 +12,7 @@ import {
   insertPrayerRequestSchema,
   insertMemorySchema,
   insertCategorySchema,
+  insertProjectSchema,
   insertWisdomEntrySchema,
   memoryCategoryEnum,
 } from "@shared/schema";
@@ -121,6 +122,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const userId = req.user.claims.sub;
     const user = await storage.getUser(userId);
     res.json(user);
+  });
+
+  // Projects — named initiatives that group categories (#16).
+  app.get("/api/projects", isAuthenticated, async (req: any, res) => {
+    res.json(await storage.listProjects(req.user.claims.sub));
+  });
+
+  app.post("/api/projects", isAuthenticated, async (req: any, res) => {
+    const parsed = insertProjectSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.message });
+    }
+    res
+      .status(201)
+      .json(await storage.createProject(req.user.claims.sub, parsed.data));
+  });
+
+  app.patch("/api/projects/:id", isAuthenticated, async (req: any, res) => {
+    const parsed = insertProjectSchema.partial().safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.message });
+    }
+    const project = await storage.updateProject(
+      req.user.claims.sub,
+      parseId(req.params.id),
+      parsed.data,
+    );
+    if (!project) return res.status(404).json({ message: "Not found" });
+    res.json(project);
+  });
+
+  app.delete("/api/projects/:id", isAuthenticated, async (req: any, res) => {
+    const deleted = await storage.deleteProject(
+      req.user.claims.sub,
+      parseId(req.params.id),
+    );
+    if (!deleted) return res.status(404).json({ message: "Not found" });
+    res.status(204).end();
   });
 
   // Categories — color-coded labels for appointments/tasks. The GET lazily

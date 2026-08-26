@@ -65,6 +65,34 @@ export const appointmentSyncStatusEnum = pgEnum("appointment_sync_status", [
   "conflict",
 ]);
 
+// A project groups categories (and, through them, the tasks/appointments
+// tagged with those categories) under a named initiative. Per-user; categories
+// point at a project via categories.projectId, and a category with no project
+// is just a free-standing label. (#16)
+export const projects = pgTable("projects", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id")
+    .notNull()
+    .references(() => users.id),
+  name: varchar("name").notNull(),
+  description: text("description"),
+  // Optional accent color for the project card (hex).
+  color: varchar("color"),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertProjectSchema = createInsertSchema(projects, {
+  name: z.string().trim().min(1, "name is required"),
+  color: z
+    .string()
+    .regex(/^#[0-9a-fA-F]{6}$/, "color must be a #rrggbb hex string")
+    .optional(),
+}).omit({ id: true, userId: true, createdAt: true, updatedAt: true });
+export type InsertProject = z.infer<typeof insertProjectSchema>;
+export type Project = typeof projects.$inferSelect;
+
 // Color-coded categories for appointments/tasks (people, contexts, ministries).
 // Per-user and editable; a fixed set is seeded on first use (see
 // storage.ensureDefaultCategories). `color` is a hex string rendered inline so
@@ -80,6 +108,10 @@ export const categories = pgTable("categories", {
   color: varchar("color").notNull(),
   parentId: integer("parent_id").references((): AnyPgColumn => categories.id, {
     onDelete: "cascade",
+  }),
+  // Optional owning project; null = a free-standing label not under a project.
+  projectId: integer("project_id").references(() => projects.id, {
+    onDelete: "set null",
   }),
   // Ordering hint for display; lower sorts first.
   sortOrder: integer("sort_order").notNull().default(0),
