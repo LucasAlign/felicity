@@ -7,6 +7,11 @@ import {
   useScanMemories,
   useUpdateMemory,
 } from "@/hooks/useMemories";
+import {
+  useCreateWisdomEntry,
+  useDeleteWisdomEntry,
+  useWisdomEntries,
+} from "@/hooks/useWisdom";
 
 const CATEGORY_LABELS: Record<MemoryCategory, string> = {
   family: "Family",
@@ -113,6 +118,97 @@ function MemoryRow({ memory }: { memory: Memory }) {
   );
 }
 
+// Words of wisdom the user curates. Surfaced here for management and rotated
+// one-per-day beneath the Bible verse on the dashboard (see lib/wisdom.ts). (#15)
+function WisdomSection() {
+  const { data: entries = [] } = useWisdomEntries();
+  const createEntry = useCreateWisdomEntry();
+  const deleteEntry = useDeleteWisdomEntry();
+  const [content, setContent] = useState("");
+  const [source, setSource] = useState("");
+
+  async function handleAdd(e: React.FormEvent) {
+    e.preventDefault();
+    const trimmed = content.trim();
+    if (!trimmed) return;
+    await createEntry.mutateAsync({
+      content: trimmed,
+      source: source.trim() || undefined,
+    });
+    setContent("");
+    setSource("");
+  }
+
+  return (
+    <div className="space-y-3">
+      <h3 className="text-sm uppercase tracking-wide text-forest-400">
+        Words of Wisdom
+      </h3>
+      <p className="text-forest-400 text-sm">
+        These rotate one per day beneath the Bible verse on your dashboard.
+      </p>
+
+      <form onSubmit={handleAdd} className="space-y-2">
+        <textarea
+          value={content}
+          onChange={(e) => setContent(e.target.value)}
+          placeholder="A saying, maxim, or bit of wisdom worth remembering…"
+          rows={2}
+          className="w-full rounded-lg border border-forest-100 px-3 py-2 bg-white/80 text-forest-700 text-sm"
+        />
+        <div className="flex gap-2">
+          <input
+            value={source}
+            onChange={(e) => setSource(e.target.value)}
+            placeholder="Source (optional)"
+            className="flex-1 rounded-lg border border-forest-100 px-3 py-2 bg-white/80 text-forest-700 text-sm"
+          />
+          <button
+            type="submit"
+            disabled={!content.trim() || createEntry.isPending}
+            className="shrink-0 rounded-lg bg-forest-600 text-cream-50 px-4 py-2 text-sm shadow-soft hover:bg-forest-700 transition-colors disabled:opacity-50"
+          >
+            Add
+          </button>
+        </div>
+      </form>
+
+      {entries.length === 0 ? (
+        <p className="text-forest-400 text-sm">
+          No wisdom yet — add a few and they'll start appearing daily.
+        </p>
+      ) : (
+        <ul className="space-y-2">
+          {entries.map((w) => (
+            <li
+              key={w.id}
+              className="flex items-start justify-between gap-2 rounded-lg bg-white/70 border border-forest-100 px-3 py-2 group"
+            >
+              <div>
+                <div className="font-serif text-sm text-forest-700 italic">
+                  "{w.content}"
+                </div>
+                {w.source && (
+                  <div className="text-xs text-forest-300 mt-0.5">
+                    — {w.source}
+                  </div>
+                )}
+              </div>
+              <button
+                onClick={() => deleteEntry.mutate(w.id)}
+                className="text-forest-200 hover:text-walnut-500 opacity-0 group-hover:opacity-100 transition-opacity text-sm shrink-0"
+                aria-label="Delete wisdom entry"
+              >
+                ✕
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 export default function WhatIKnow() {
   const { data: memories = [], isLoading } = useMemories();
   const scan = useScanMemories();
@@ -194,6 +290,10 @@ export default function WhatIKnow() {
           )}
         </>
       )}
+
+      <div className="border-t border-forest-100 pt-6">
+        <WisdomSection />
+      </div>
     </div>
   );
 }

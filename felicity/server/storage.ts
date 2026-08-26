@@ -6,6 +6,7 @@ import {
   ideas,
   shoppingItems,
   prayerRequests,
+  wisdomEntries,
   brainDumps,
   notifications,
   memories,
@@ -28,6 +29,8 @@ import {
   type InsertShoppingItem,
   type PrayerRequest,
   type InsertPrayerRequest,
+  type WisdomEntry,
+  type InsertWisdomEntry,
   type BrainDump,
   type InsertBrainDump,
   type Notification,
@@ -170,6 +173,18 @@ export interface IStorage {
     data: Partial<InsertPrayerRequest>,
   ): Promise<PrayerRequest | undefined>;
   deletePrayerRequest(userId: string, id: number): Promise<boolean>;
+
+  listWisdomEntries(userId: string): Promise<WisdomEntry[]>;
+  createWisdomEntry(
+    userId: string,
+    data: InsertWisdomEntry,
+  ): Promise<WisdomEntry>;
+  updateWisdomEntry(
+    userId: string,
+    id: number,
+    data: Partial<InsertWisdomEntry>,
+  ): Promise<WisdomEntry | undefined>;
+  deleteWisdomEntry(userId: string, id: number): Promise<boolean>;
 
   listBrainDumps(userId: string): Promise<BrainDump[]>;
   createBrainDump(userId: string, data: InsertBrainDump): Promise<BrainDump>;
@@ -597,6 +612,46 @@ export class DatabaseStorage implements IStorage {
         and(eq(prayerRequests.id, id), eq(prayerRequests.userId, userId)),
       )
       .returning({ id: prayerRequests.id });
+    return result.length > 0;
+  }
+
+  async listWisdomEntries(userId: string): Promise<WisdomEntry[]> {
+    return db
+      .select()
+      .from(wisdomEntries)
+      .where(eq(wisdomEntries.userId, userId))
+      .orderBy(asc(wisdomEntries.id));
+  }
+
+  async createWisdomEntry(
+    userId: string,
+    data: InsertWisdomEntry,
+  ): Promise<WisdomEntry> {
+    const [entry] = await db
+      .insert(wisdomEntries)
+      .values({ ...data, userId })
+      .returning();
+    return entry;
+  }
+
+  async updateWisdomEntry(
+    userId: string,
+    id: number,
+    data: Partial<InsertWisdomEntry>,
+  ): Promise<WisdomEntry | undefined> {
+    const [entry] = await db
+      .update(wisdomEntries)
+      .set({ ...data, updatedAt: new Date() })
+      .where(and(eq(wisdomEntries.id, id), eq(wisdomEntries.userId, userId)))
+      .returning();
+    return entry;
+  }
+
+  async deleteWisdomEntry(userId: string, id: number): Promise<boolean> {
+    const result = await db
+      .delete(wisdomEntries)
+      .where(and(eq(wisdomEntries.id, id), eq(wisdomEntries.userId, userId)))
+      .returning({ id: wisdomEntries.id });
     return result.length > 0;
   }
 

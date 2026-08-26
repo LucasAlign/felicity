@@ -12,6 +12,7 @@ import {
   insertPrayerRequestSchema,
   insertMemorySchema,
   insertCategorySchema,
+  insertWisdomEntrySchema,
   memoryCategoryEnum,
 } from "@shared/schema";
 import { extractionEngine } from "./extraction";
@@ -392,6 +393,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(204).end();
     },
   );
+
+  // Wisdom entries — user-authored words of wisdom, surfaced in What I Know
+  // and rotated one-per-day beneath the Bible verse on the dashboard (#15).
+  app.get("/api/wisdom", isAuthenticated, async (req: any, res) => {
+    res.json(await storage.listWisdomEntries(req.user.claims.sub));
+  });
+
+  app.post("/api/wisdom", isAuthenticated, async (req: any, res) => {
+    const parsed = insertWisdomEntrySchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.message });
+    }
+    res
+      .status(201)
+      .json(await storage.createWisdomEntry(req.user.claims.sub, parsed.data));
+  });
+
+  app.patch("/api/wisdom/:id", isAuthenticated, async (req: any, res) => {
+    const parsed = insertWisdomEntrySchema.partial().safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.message });
+    }
+    const entry = await storage.updateWisdomEntry(
+      req.user.claims.sub,
+      parseId(req.params.id),
+      parsed.data,
+    );
+    if (!entry) return res.status(404).json({ message: "Not found" });
+    res.json(entry);
+  });
+
+  app.delete("/api/wisdom/:id", isAuthenticated, async (req: any, res) => {
+    const deleted = await storage.deleteWisdomEntry(
+      req.user.claims.sub,
+      parseId(req.params.id),
+    );
+    if (!deleted) return res.status(404).json({ message: "Not found" });
+    res.status(204).end();
+  });
 
   // OCR — reads text out of an uploaded photo (planner page, sticky note,
   // whiteboard, ...). Returns raw text only; the client feeds it into

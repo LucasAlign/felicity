@@ -275,6 +275,29 @@ export const insertPrayerRequestSchema = createInsertSchema(
 export type InsertPrayerRequest = z.infer<typeof insertPrayerRequestSchema>;
 export type PrayerRequest = typeof prayerRequests.$inferSelect;
 
+// User-authored "words of wisdom" — short quotes/maxims surfaced in What I
+// Know and rotated one-per-day beneath the Bible verse on the dashboard
+// (see client/src/lib/wisdom.ts). Distinct from `memories`, which are
+// AI-suggested, permission-based patterns rather than curated quotes. (#15)
+export const wisdomEntries = pgTable("wisdom_entries", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id")
+    .notNull()
+    .references(() => users.id),
+  content: text("content").notNull(),
+  // Optional attribution (e.g. "Proverbs", "Grandma", "C.S. Lewis").
+  source: varchar("source"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertWisdomEntrySchema = createInsertSchema(wisdomEntries, {
+  content: z.string().trim().min(1, "content is required"),
+  source: z.string().trim().optional(),
+}).omit({ id: true, userId: true, createdAt: true, updatedAt: true });
+export type InsertWisdomEntry = z.infer<typeof insertWisdomEntrySchema>;
+export type WisdomEntry = typeof wisdomEntries.$inferSelect;
+
 // A single Brain Dump session: the raw transcript plus a record of what
 // extraction produced from it, so the summary screen and history stay
 // accurate even as the underlying extraction engine changes later.

@@ -24,9 +24,11 @@ import {
 import { useDeleteTask, useTasks, useUpdateTask } from "@/hooks/useTasks";
 import { useCategories } from "@/hooks/useCategories";
 import { colorForCategory } from "@/lib/categories";
+import { useWisdomEntries } from "@/hooks/useWisdom";
 import QuickAddDialog from "@/components/calendar/QuickAddDialog";
 import BrainDumpDialog from "@/components/braindump/BrainDumpDialog";
 import { getVerseOfTheDay } from "@/lib/bibleVerses";
+import { wisdomOfTheDay } from "@/lib/wisdom";
 import type { Appointment, Task } from "@shared/schema";
 
 type AgendaEntry =
@@ -284,6 +286,8 @@ export default function Dashboard() {
   const [editingTask, setEditingTask] = useState<Task | null>(null);
 
   const verse = getVerseOfTheDay();
+  const { data: wisdomEntries = [] } = useWisdomEntries();
+  const wisdom = wisdomOfTheDay(wisdomEntries);
 
   const now = new Date();
   const today = startOfDay(now);
@@ -375,6 +379,22 @@ export default function Dashboard() {
             "{verse.text}"
           </blockquote>
           <p className="mt-2 text-forest-400 not-italic">— {verse.reference}</p>
+
+          {wisdom && (
+            <div className="mt-4 pt-4 border-t border-walnut-100/70">
+              <p className="text-xs uppercase tracking-wide text-walnut-400 mb-1">
+                Wisdom for today
+              </p>
+              <p className="font-serif text-base text-forest-600 italic leading-relaxed">
+                "{wisdom.content}"
+              </p>
+              {wisdom.source && (
+                <p className="mt-1 text-forest-400 not-italic">
+                  — {wisdom.source}
+                </p>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
