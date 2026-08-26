@@ -15,6 +15,7 @@ import {
   insertProjectSchema,
   insertWisdomEntrySchema,
   insertMealSchema,
+  insertJournalEntrySchema,
   memoryCategoryEnum,
 } from "@shared/schema";
 import { extractionEngine } from "./extraction";
@@ -504,6 +505,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.delete("/api/meals/:id", isAuthenticated, async (req: any, res) => {
     const deleted = await storage.deleteMeal(
+      req.user.claims.sub,
+      parseId(req.params.id),
+    );
+    if (!deleted) return res.status(404).json({ message: "Not found" });
+    res.status(204).end();
+  });
+
+  // Journal — the user's own dated reflections, in their own tab (#17).
+  app.get("/api/journal", isAuthenticated, async (req: any, res) => {
+    res.json(await storage.listJournalEntries(req.user.claims.sub));
+  });
+
+  app.post("/api/journal", isAuthenticated, async (req: any, res) => {
+    const parsed = insertJournalEntrySchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.message });
+    }
+    res
+      .status(201)
+      .json(await storage.createJournalEntry(req.user.claims.sub, parsed.data));
+  });
+
+  app.patch("/api/journal/:id", isAuthenticated, async (req: any, res) => {
+    const parsed = insertJournalEntrySchema.partial().safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.message });
+    }
+    const entry = await storage.updateJournalEntry(
+      req.user.claims.sub,
+      parseId(req.params.id),
+      parsed.data,
+    );
+    if (!entry) return res.status(404).json({ message: "Not found" });
+    res.json(entry);
+  });
+
+  app.delete("/api/journal/:id", isAuthenticated, async (req: any, res) => {
+    const deleted = await storage.deleteJournalEntry(
       req.user.claims.sub,
       parseId(req.params.id),
     );

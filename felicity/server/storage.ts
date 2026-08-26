@@ -8,6 +8,7 @@ import {
   prayerRequests,
   wisdomEntries,
   meals,
+  journalEntries,
   brainDumps,
   notifications,
   memories,
@@ -37,6 +38,8 @@ import {
   type InsertWisdomEntry,
   type Meal,
   type InsertMeal,
+  type JournalEntry,
+  type InsertJournalEntry,
   type BrainDump,
   type InsertBrainDump,
   type Notification,
@@ -209,6 +212,18 @@ export interface IStorage {
     data: Partial<InsertMeal>,
   ): Promise<Meal | undefined>;
   deleteMeal(userId: string, id: number): Promise<boolean>;
+
+  listJournalEntries(userId: string): Promise<JournalEntry[]>;
+  createJournalEntry(
+    userId: string,
+    data: InsertJournalEntry,
+  ): Promise<JournalEntry>;
+  updateJournalEntry(
+    userId: string,
+    id: number,
+    data: Partial<InsertJournalEntry>,
+  ): Promise<JournalEntry | undefined>;
+  deleteJournalEntry(userId: string, id: number): Promise<boolean>;
 
   listBrainDumps(userId: string): Promise<BrainDump[]>;
   createBrainDump(userId: string, data: InsertBrainDump): Promise<BrainDump>;
@@ -750,6 +765,50 @@ export class DatabaseStorage implements IStorage {
       .delete(meals)
       .where(and(eq(meals.id, id), eq(meals.userId, userId)))
       .returning({ id: meals.id });
+    return result.length > 0;
+  }
+
+  async listJournalEntries(userId: string): Promise<JournalEntry[]> {
+    return db
+      .select()
+      .from(journalEntries)
+      .where(eq(journalEntries.userId, userId))
+      .orderBy(desc(journalEntries.createdAt), desc(journalEntries.id));
+  }
+
+  async createJournalEntry(
+    userId: string,
+    data: InsertJournalEntry,
+  ): Promise<JournalEntry> {
+    const [entry] = await db
+      .insert(journalEntries)
+      .values({ ...data, userId })
+      .returning();
+    return entry;
+  }
+
+  async updateJournalEntry(
+    userId: string,
+    id: number,
+    data: Partial<InsertJournalEntry>,
+  ): Promise<JournalEntry | undefined> {
+    const [entry] = await db
+      .update(journalEntries)
+      .set({ ...data, updatedAt: new Date() })
+      .where(
+        and(eq(journalEntries.id, id), eq(journalEntries.userId, userId)),
+      )
+      .returning();
+    return entry;
+  }
+
+  async deleteJournalEntry(userId: string, id: number): Promise<boolean> {
+    const result = await db
+      .delete(journalEntries)
+      .where(
+        and(eq(journalEntries.id, id), eq(journalEntries.userId, userId)),
+      )
+      .returning({ id: journalEntries.id });
     return result.length > 0;
   }
 

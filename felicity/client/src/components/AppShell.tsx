@@ -4,6 +4,7 @@ import {
   Calendar,
   BookOpen,
   FolderKanban,
+  NotebookPen,
   Leaf,
   LogOut,
 } from "lucide-react";
@@ -13,6 +14,7 @@ const NAV_ITEMS = [
   { href: "/", label: "Dashboard", icon: Home },
   { href: "/calendar", label: "Calendar", icon: Calendar },
   { href: "/projects", label: "Projects", icon: FolderKanban },
+  { href: "/journal", label: "Journal", icon: NotebookPen },
   { href: "/what-i-know", label: "What I Know", icon: BookOpen },
 ];
 

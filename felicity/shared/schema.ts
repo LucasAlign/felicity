@@ -360,6 +360,24 @@ export const insertMealSchema = createInsertSchema(meals, {
 export type InsertMeal = z.infer<typeof insertMealSchema>;
 export type Meal = typeof meals.$inferSelect;
 
+// Free-form journal entries — the user's own dated reflections, kept in their
+// own tab (separate from AI-touched notes/memories). (#17)
+export const journalEntries = pgTable("journal_entries", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id")
+    .notNull()
+    .references(() => users.id),
+  content: text("content").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertJournalEntrySchema = createInsertSchema(journalEntries, {
+  content: z.string().trim().min(1, "content is required"),
+}).omit({ id: true, userId: true, createdAt: true, updatedAt: true });
+export type InsertJournalEntry = z.infer<typeof insertJournalEntrySchema>;
+export type JournalEntry = typeof journalEntries.$inferSelect;
+
 // A single Brain Dump session: the raw transcript plus a record of what
 // extraction produced from it, so the summary screen and history stay
 // accurate even as the underlying extraction engine changes later.
