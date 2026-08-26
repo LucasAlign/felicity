@@ -7,6 +7,7 @@ import {
   shoppingItems,
   prayerRequests,
   wisdomEntries,
+  meals,
   brainDumps,
   notifications,
   memories,
@@ -34,6 +35,8 @@ import {
   type InsertPrayerRequest,
   type WisdomEntry,
   type InsertWisdomEntry,
+  type Meal,
+  type InsertMeal,
   type BrainDump,
   type InsertBrainDump,
   type Notification,
@@ -197,6 +200,15 @@ export interface IStorage {
     data: Partial<InsertWisdomEntry>,
   ): Promise<WisdomEntry | undefined>;
   deleteWisdomEntry(userId: string, id: number): Promise<boolean>;
+
+  listMeals(userId: string): Promise<Meal[]>;
+  createMeal(userId: string, data: InsertMeal): Promise<Meal>;
+  updateMeal(
+    userId: string,
+    id: number,
+    data: Partial<InsertMeal>,
+  ): Promise<Meal | undefined>;
+  deleteMeal(userId: string, id: number): Promise<boolean>;
 
   listBrainDumps(userId: string): Promise<BrainDump[]>;
   createBrainDump(userId: string, data: InsertBrainDump): Promise<BrainDump>;
@@ -701,6 +713,43 @@ export class DatabaseStorage implements IStorage {
       .delete(wisdomEntries)
       .where(and(eq(wisdomEntries.id, id), eq(wisdomEntries.userId, userId)))
       .returning({ id: wisdomEntries.id });
+    return result.length > 0;
+  }
+
+  async listMeals(userId: string): Promise<Meal[]> {
+    return db
+      .select()
+      .from(meals)
+      .where(eq(meals.userId, userId))
+      .orderBy(asc(meals.date), asc(meals.id));
+  }
+
+  async createMeal(userId: string, data: InsertMeal): Promise<Meal> {
+    const [meal] = await db
+      .insert(meals)
+      .values({ ...data, userId })
+      .returning();
+    return meal;
+  }
+
+  async updateMeal(
+    userId: string,
+    id: number,
+    data: Partial<InsertMeal>,
+  ): Promise<Meal | undefined> {
+    const [meal] = await db
+      .update(meals)
+      .set({ ...data, updatedAt: new Date() })
+      .where(and(eq(meals.id, id), eq(meals.userId, userId)))
+      .returning();
+    return meal;
+  }
+
+  async deleteMeal(userId: string, id: number): Promise<boolean> {
+    const result = await db
+      .delete(meals)
+      .where(and(eq(meals.id, id), eq(meals.userId, userId)))
+      .returning({ id: meals.id });
     return result.length > 0;
   }
 

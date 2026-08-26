@@ -14,6 +14,7 @@ import {
   insertCategorySchema,
   insertProjectSchema,
   insertWisdomEntrySchema,
+  insertMealSchema,
   memoryCategoryEnum,
 } from "@shared/schema";
 import { extractionEngine } from "./extraction";
@@ -465,6 +466,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.delete("/api/wisdom/:id", isAuthenticated, async (req: any, res) => {
     const deleted = await storage.deleteWisdomEntry(
+      req.user.claims.sub,
+      parseId(req.params.id),
+    );
+    if (!deleted) return res.status(404).json({ message: "Not found" });
+    res.status(204).end();
+  });
+
+  // Meals — planned meals per (day, slot) for the dashboard planner (#14).
+  app.get("/api/meals", isAuthenticated, async (req: any, res) => {
+    res.json(await storage.listMeals(req.user.claims.sub));
+  });
+
+  app.post("/api/meals", isAuthenticated, async (req: any, res) => {
+    const parsed = insertMealSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.message });
+    }
+    res
+      .status(201)
+      .json(await storage.createMeal(req.user.claims.sub, parsed.data));
+  });
+
+  app.patch("/api/meals/:id", isAuthenticated, async (req: any, res) => {
+    const parsed = insertMealSchema.partial().safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.message });
+    }
+    const meal = await storage.updateMeal(
+      req.user.claims.sub,
+      parseId(req.params.id),
+      parsed.data,
+    );
+    if (!meal) return res.status(404).json({ message: "Not found" });
+    res.json(meal);
+  });
+
+  app.delete("/api/meals/:id", isAuthenticated, async (req: any, res) => {
+    const deleted = await storage.deleteMeal(
       req.user.claims.sub,
       parseId(req.params.id),
     );

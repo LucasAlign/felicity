@@ -25,6 +25,7 @@ import { useDeleteTask, useTasks, useUpdateTask } from "@/hooks/useTasks";
 import { useCategories } from "@/hooks/useCategories";
 import { colorForCategory } from "@/lib/categories";
 import { useWisdomEntries } from "@/hooks/useWisdom";
+import MealPlanner from "@/components/dashboard/MealPlanner";
 import QuickAddDialog from "@/components/calendar/QuickAddDialog";
 import BrainDumpDialog from "@/components/braindump/BrainDumpDialog";
 import { getVerseOfTheDay } from "@/lib/bibleVerses";
@@ -367,6 +368,8 @@ export default function Dashboard() {
           onEditAppointment={handleEditAppointment}
           onEditTask={handleEditTask}
         />
+
+        <MealPlanner />
 
         <div className="rounded-2xl bg-gradient-to-br from-walnut-50/80 to-cream-100/60 backdrop-blur-sm border border-white/60 ring-1 ring-walnut-100/70 shadow-card p-6">
           <div className="flex items-center gap-2.5 mb-3">

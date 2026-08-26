@@ -330,6 +330,36 @@ export const insertWisdomEntrySchema = createInsertSchema(wisdomEntries, {
 export type InsertWisdomEntry = z.infer<typeof insertWisdomEntrySchema>;
 export type WisdomEntry = typeof wisdomEntries.$inferSelect;
 
+// Meal planning: one planned meal per (day, slot). Surfaced in the dashboard
+// meal-planning window. `date` is the calendar day the meal is for, stored at
+// local midnight by the client. (#14)
+export const mealSlotEnum = pgEnum("meal_slot", [
+  "breakfast",
+  "lunch",
+  "dinner",
+  "snack",
+]);
+export type MealSlot = (typeof mealSlotEnum.enumValues)[number];
+
+export const meals = pgTable("meals", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id")
+    .notNull()
+    .references(() => users.id),
+  date: timestamp("date").notNull(),
+  slot: mealSlotEnum("slot").notNull(),
+  title: varchar("title").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertMealSchema = createInsertSchema(meals, {
+  date: z.coerce.date(),
+  title: z.string().trim().min(1, "title is required"),
+}).omit({ id: true, userId: true, createdAt: true, updatedAt: true });
+export type InsertMeal = z.infer<typeof insertMealSchema>;
+export type Meal = typeof meals.$inferSelect;
+
 // A single Brain Dump session: the raw transcript plus a record of what
 // extraction produced from it, so the summary screen and history stay
 // accurate even as the underlying extraction engine changes later.
