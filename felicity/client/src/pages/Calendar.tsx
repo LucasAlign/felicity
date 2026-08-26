@@ -9,11 +9,12 @@ import {
   subWeeks,
 } from "date-fns";
 import { useAppointments } from "@/hooks/useAppointments";
-import { useTasks } from "@/hooks/useTasks";
+import { useTasks, useUpdateTask } from "@/hooks/useTasks";
 import MonthView from "@/components/calendar/MonthView";
 import WeekView from "@/components/calendar/WeekView";
 import DayView from "@/components/calendar/DayView";
 import TasksPanel from "@/components/calendar/TasksPanel";
+import UnassignedPanel from "@/components/calendar/UnassignedPanel";
 import QuickAddDialog from "@/components/calendar/QuickAddDialog";
 import GoogleCalendarPanel from "@/components/calendar/GoogleCalendarPanel";
 import type { Appointment, Task } from "@shared/schema";
@@ -46,6 +47,15 @@ export default function Calendar() {
   const { data: appointments = [], isLoading: appointmentsLoading } =
     useAppointments();
   const { data: tasks = [] } = useTasks();
+  const updateTask = useUpdateTask();
+
+  // Dropping an unassigned task onto a day schedules it for that date (#4).
+  // Local midnight (not `new Date(day)`) matches how the quick-add form stores
+  // a due date, so it lands on the intended day west of UTC.
+  function handleAssignTask(taskId: number, day: Date) {
+    const dueDate = new Date(`${format(day, "yyyy-MM-dd")}T00:00:00`);
+    updateTask.mutate({ id: taskId, data: { dueDate } });
+  }
 
   function goToday() {
     setCurrentDate(new Date());
@@ -166,6 +176,7 @@ export default function Calendar() {
                 currentDate={currentDate}
                 appointments={appointments}
                 onSelectDay={handleSelectDay}
+                onAssignTask={handleAssignTask}
               />
             )}
             {view === "week" && (
@@ -185,7 +196,10 @@ export default function Calendar() {
           </>
         )}
 
-        <TasksPanel tasks={tasks} onEditTask={handleEditTask} />
+        <div className="space-y-5">
+          {view === "month" && <UnassignedPanel tasks={tasks} />}
+          <TasksPanel tasks={tasks} onEditTask={handleEditTask} />
+        </div>
       </div>
 
       <QuickAddDialog

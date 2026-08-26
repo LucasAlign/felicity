@@ -1,9 +1,19 @@
 import type { Task } from "@shared/schema";
 
+// dataTransfer key used when dragging a task from the Unassigned panel onto a
+// calendar day (#4). Shared so the drag source and drop target agree.
+export const TASK_DRAG_MIME = "application/x-felicity-task-id";
+
 // A completed task stays visible (crossed off) for this long, then drops out of
 // the active list into the archive. Keeps just-finished items on screen for a
 // beat without letting them pile up. See issue #8.
 export const ARCHIVE_AFTER_MS = 12 * 60 * 60 * 1000; // 12 hours
+
+// "Unassigned" = an open task with no date yet — the pool that can be dragged
+// onto a calendar day to schedule it (#4).
+export function isUnassigned(task: Task): boolean {
+  return !task.completed && !task.dueDate;
+}
 
 // Completed within the last 12h → still shown, struck through.
 export function isRecentlyCompleted(task: Task, now: Date = new Date()): boolean {

@@ -9,10 +9,12 @@ import {
   startOfMonth,
   startOfWeek,
 } from "date-fns";
+import { useState } from "react";
 import { Clock, Sun } from "lucide-react";
 import type { Appointment } from "@shared/schema";
 import { useCategories } from "@/hooks/useCategories";
 import { colorForCategory } from "@/lib/categories";
+import { TASK_DRAG_MIME } from "@/lib/tasks";
 
 const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -20,12 +22,16 @@ export default function MonthView({
   currentDate,
   appointments,
   onSelectDay,
+  onAssignTask,
 }: {
   currentDate: Date;
   appointments: Appointment[];
   onSelectDay: (day: Date) => void;
+  // Called when an unassigned task is dropped onto a day (#4).
+  onAssignTask?: (taskId: number, day: Date) => void;
 }) {
   const { data: categories = [] } = useCategories();
+  const [dragOverKey, setDragOverKey] = useState<string | null>(null);
   const gridStart = startOfWeek(startOfMonth(currentDate));
   const gridEnd = endOfWeek(endOfMonth(currentDate));
   const days = eachDayOfInterval({ start: gridStart, end: gridEnd });
@@ -48,13 +54,48 @@ export default function MonthView({
             isSameDay(new Date(a.startTime), day),
           );
           const inMonth = isSameMonth(day, currentDate);
+          const dayKey = day.toISOString();
+          const isDropTarget = dragOverKey === dayKey;
 
           return (
             <button
-              key={day.toISOString()}
+              key={dayKey}
               onClick={() => onSelectDay(day)}
-              className={`min-h-24 border-b border-r border-forest-50 p-2 text-left align-top hover:bg-forest-50/60 transition-colors ${
-                inMonth ? "" : "bg-forest-50/30"
+              onDragOver={
+                onAssignTask
+                  ? (e) => {
+                      // Only accept a task drag; allow the drop.
+                      if (e.dataTransfer.types.includes(TASK_DRAG_MIME)) {
+                        e.preventDefault();
+                        e.dataTransfer.dropEffect = "move";
+                        if (dragOverKey !== dayKey) setDragOverKey(dayKey);
+                      }
+                    }
+                  : undefined
+              }
+              onDragLeave={
+                onAssignTask
+                  ? () => setDragOverKey((k) => (k === dayKey ? null : k))
+                  : undefined
+              }
+              onDrop={
+                onAssignTask
+                  ? (e) => {
+                      const raw = e.dataTransfer.getData(TASK_DRAG_MIME);
+                      setDragOverKey(null);
+                      if (!raw) return;
+                      e.preventDefault();
+                      const id = Number(raw);
+                      if (Number.isInteger(id)) onAssignTask(id, day);
+                    }
+                  : undefined
+              }
+              className={`min-h-24 border-b border-r border-forest-50 p-2 text-left align-top transition-colors ${
+                isDropTarget
+                  ? "bg-forest-100 ring-2 ring-inset ring-forest-400"
+                  : inMonth
+                    ? "hover:bg-forest-50/60"
+                    : "bg-forest-50/30 hover:bg-forest-50/60"
               }`}
             >
               <span
