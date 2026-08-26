@@ -15,8 +15,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   // so it opts out of the centered max-width column other pages sit in.
   const fullBleed = location === "/calendar";
   const mainClass = fullBleed
-    ? "px-2 sm:px-4 py-6 pb-24 sm:pb-10"
-    : "max-w-5xl mx-auto px-4 sm:px-6 py-10 pb-24 sm:pb-10";
+    ? "px-2 sm:px-4 pt-5 sm:pt-6 pb-24 sm:pb-10"
+    : "max-w-5xl mx-auto px-4 sm:px-6 pt-6 sm:pt-10 pb-24 sm:pb-10";
 
   return (
     <div className="min-h-screen">

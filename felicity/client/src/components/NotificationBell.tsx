@@ -31,7 +31,10 @@ export default function NotificationBell() {
             className="fixed inset-0 z-40"
             onClick={() => setOpen(false)}
           />
-          <div className="absolute right-0 mt-2 w-80 rounded-2xl bg-cream-50 border border-forest-100 shadow-soft z-50 p-3">
+          {/* Mobile: pin to the viewport just under the header, full width
+              minus side insets, so it's centered and never clipped off-screen.
+              sm+: revert to the anchored dropdown under the bell (#11). */}
+          <div className="fixed inset-x-3 top-[4.25rem] z-50 rounded-2xl bg-cream-50 border border-forest-100 shadow-soft p-3 sm:absolute sm:inset-x-auto sm:right-0 sm:top-auto sm:mt-2 sm:w-80">
             <h4 className="text-sm text-forest-600 px-2 mb-2">
               Notifications
             </h4>
