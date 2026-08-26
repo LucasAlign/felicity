@@ -11,6 +11,7 @@ import {
   CalendarDays,
   type LucideIcon,
   Mic,
+  Pencil,
   Plus,
   Sparkles,
   Sun,
@@ -73,7 +74,13 @@ function buildEntries(
   return entries.sort((a, b) => a.time - b.time);
 }
 
-function TaskEntryRow({ task }: { task: Task }) {
+function TaskEntryRow({
+  task,
+  onEdit,
+}: {
+  task: Task;
+  onEdit: (task: Task) => void;
+}) {
   const updateTask = useUpdateTask();
   const deleteTask = useDeleteTask();
   const { data: categories = [] } = useCategories();
@@ -138,13 +145,22 @@ function TaskEntryRow({ task }: { task: Task }) {
           </span>
         </div>
       </div>
-      <button
-        onClick={() => deleteTask.mutate(task.id)}
-        className="text-forest-200 hover:text-walnut-500 opacity-0 group-hover:opacity-100 transition-opacity text-sm mt-0.5"
-        aria-label="Delete task"
-      >
-        ✕
-      </button>
+      <div className="flex items-center gap-1 mt-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+        <button
+          onClick={() => onEdit(task)}
+          className="text-forest-200 hover:text-forest-600 transition-colors"
+          aria-label="Edit task"
+        >
+          <Pencil size={14} strokeWidth={2} />
+        </button>
+        <button
+          onClick={() => deleteTask.mutate(task.id)}
+          className="text-forest-200 hover:text-walnut-500 transition-colors text-sm"
+          aria-label="Delete task"
+        >
+          ✕
+        </button>
+      </div>
     </li>
   );
 }
@@ -199,6 +215,7 @@ function AgendaCard({
   entries,
   emptyMessage,
   onEditAppointment,
+  onEditTask,
 }: {
   title: string;
   icon: LucideIcon;
@@ -206,6 +223,7 @@ function AgendaCard({
   entries: AgendaEntry[];
   emptyMessage: string;
   onEditAppointment: (appointment: Appointment) => void;
+  onEditTask: (task: Task) => void;
 }) {
   const styles = ACCENT_STYLES[accent];
 
@@ -235,7 +253,11 @@ function AgendaCard({
         <ul className="divide-y divide-forest-100/60">
           {entries.map((entry) =>
             entry.kind === "task" ? (
-              <TaskEntryRow key={`task-${entry.task.id}`} task={entry.task} />
+              <TaskEntryRow
+                key={`task-${entry.task.id}`}
+                task={entry.task}
+                onEdit={onEditTask}
+              />
             ) : (
               <AppointmentEntryRow
                 key={`appt-${entry.appointment.id}`}
@@ -259,6 +281,7 @@ export default function Dashboard() {
   const [brainDumpOpen, setBrainDumpOpen] = useState(false);
   const [editingAppointment, setEditingAppointment] =
     useState<Appointment | null>(null);
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
 
   const verse = getVerseOfTheDay();
 
@@ -274,13 +297,21 @@ export default function Dashboard() {
   const weekEntries = buildEntries(tasks, appointments, weekRange);
 
   function handleEditAppointment(appointment: Appointment) {
+    setEditingTask(null);
     setEditingAppointment(appointment);
+    setQuickAddOpen(true);
+  }
+
+  function handleEditTask(task: Task) {
+    setEditingAppointment(null);
+    setEditingTask(task);
     setQuickAddOpen(true);
   }
 
   function handleCloseQuickAdd() {
     setQuickAddOpen(false);
     setEditingAppointment(null);
+    setEditingTask(null);
   }
 
   return (
@@ -320,6 +351,7 @@ export default function Dashboard() {
           entries={todayEntries}
           emptyMessage="Nothing on your plate today — enjoy the quiet."
           onEditAppointment={handleEditAppointment}
+          onEditTask={handleEditTask}
         />
 
         <AgendaCard
@@ -329,6 +361,7 @@ export default function Dashboard() {
           entries={weekEntries}
           emptyMessage="Nothing else scheduled this week."
           onEditAppointment={handleEditAppointment}
+          onEditTask={handleEditTask}
         />
 
         <div className="rounded-2xl bg-gradient-to-br from-walnut-50/80 to-cream-100/60 backdrop-blur-sm border border-white/60 ring-1 ring-walnut-100/70 shadow-card p-6">
@@ -350,6 +383,7 @@ export default function Dashboard() {
         onClose={handleCloseQuickAdd}
         defaultDate={new Date()}
         editingAppointment={editingAppointment}
+        editingTask={editingTask}
       />
       <BrainDumpDialog
         open={brainDumpOpen}

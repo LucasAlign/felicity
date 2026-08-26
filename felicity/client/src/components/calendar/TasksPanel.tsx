@@ -1,12 +1,19 @@
 import { useMemo, useState } from "react";
 import { format } from "date-fns";
+import { Pencil } from "lucide-react";
 import type { Task } from "@shared/schema";
 import { useDeleteTask, useUpdateTask } from "@/hooks/useTasks";
 import { useCategories } from "@/hooks/useCategories";
 import { colorForCategory } from "@/lib/categories";
 import { activeTasks, isArchived } from "@/lib/tasks";
 
-function TaskRow({ task }: { task: Task }) {
+function TaskRow({
+  task,
+  onEdit,
+}: {
+  task: Task;
+  onEdit: (task: Task) => void;
+}) {
   const updateTask = useUpdateTask();
   const deleteTask = useDeleteTask();
   const { data: categories = [] } = useCategories();
@@ -43,18 +50,33 @@ function TaskRow({ task }: { task: Task }) {
           </div>
         )}
       </div>
-      <button
-        onClick={() => deleteTask.mutate(task.id)}
-        className="text-forest-200 hover:text-walnut-500 opacity-0 group-hover:opacity-100 transition-opacity text-sm"
-        aria-label="Delete task"
-      >
-        ✕
-      </button>
+      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+        <button
+          onClick={() => onEdit(task)}
+          className="text-forest-200 hover:text-forest-600 transition-colors"
+          aria-label="Edit task"
+        >
+          <Pencil size={14} strokeWidth={2} />
+        </button>
+        <button
+          onClick={() => deleteTask.mutate(task.id)}
+          className="text-forest-200 hover:text-walnut-500 transition-colors text-sm"
+          aria-label="Delete task"
+        >
+          ✕
+        </button>
+      </div>
     </li>
   );
 }
 
-export default function TasksPanel({ tasks }: { tasks: Task[] }) {
+export default function TasksPanel({
+  tasks,
+  onEditTask,
+}: {
+  tasks: Task[];
+  onEditTask: (task: Task) => void;
+}) {
   const [showArchived, setShowArchived] = useState(false);
 
   // Active list = open tasks + tasks completed within the last 12h (shown
@@ -79,7 +101,7 @@ export default function TasksPanel({ tasks }: { tasks: Task[] }) {
       ) : (
         <ul className="space-y-2">
           {active.map((task) => (
-            <TaskRow key={task.id} task={task} />
+            <TaskRow key={task.id} task={task} onEdit={onEditTask} />
           ))}
         </ul>
       )}
@@ -95,7 +117,7 @@ export default function TasksPanel({ tasks }: { tasks: Task[] }) {
           {showArchived && (
             <ul className="space-y-2 mt-2">
               {archivedTasks.map((task) => (
-                <TaskRow key={task.id} task={task} />
+                <TaskRow key={task.id} task={task} onEdit={onEditTask} />
               ))}
             </ul>
           )}

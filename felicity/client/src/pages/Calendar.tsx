@@ -16,7 +16,7 @@ import DayView from "@/components/calendar/DayView";
 import TasksPanel from "@/components/calendar/TasksPanel";
 import QuickAddDialog from "@/components/calendar/QuickAddDialog";
 import GoogleCalendarPanel from "@/components/calendar/GoogleCalendarPanel";
-import type { Appointment } from "@shared/schema";
+import type { Appointment, Task } from "@shared/schema";
 
 type ViewMode = "month" | "week" | "day";
 
@@ -41,6 +41,7 @@ export default function Calendar() {
   const [quickAddDate, setQuickAddDate] = useState(new Date());
   const [editingAppointment, setEditingAppointment] =
     useState<Appointment | null>(null);
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
 
   const { data: appointments = [], isLoading: appointmentsLoading } =
     useAppointments();
@@ -67,13 +68,27 @@ export default function Calendar() {
   // Month/Week/Day switcher.
   function handleSelectDay(day: Date) {
     setEditingAppointment(null);
+    setEditingTask(null);
     setQuickAddDate(day);
     setQuickAddOpen(true);
   }
 
   function handleSelectAppointment(appointment: Appointment) {
+    setEditingTask(null);
     setEditingAppointment(appointment);
     setQuickAddOpen(true);
+  }
+
+  function handleEditTask(task: Task) {
+    setEditingAppointment(null);
+    setEditingTask(task);
+    setQuickAddOpen(true);
+  }
+
+  function handleCloseQuickAdd() {
+    setQuickAddOpen(false);
+    setEditingAppointment(null);
+    setEditingTask(null);
   }
 
   return (
@@ -128,6 +143,7 @@ export default function Calendar() {
           <button
             onClick={() => {
               setEditingAppointment(null);
+              setEditingTask(null);
               setQuickAddDate(currentDate);
               setQuickAddOpen(true);
             }}
@@ -169,14 +185,15 @@ export default function Calendar() {
           </>
         )}
 
-        <TasksPanel tasks={tasks} />
+        <TasksPanel tasks={tasks} onEditTask={handleEditTask} />
       </div>
 
       <QuickAddDialog
         open={quickAddOpen}
-        onClose={() => setQuickAddOpen(false)}
+        onClose={handleCloseQuickAdd}
         defaultDate={quickAddDate}
         editingAppointment={editingAppointment}
+        editingTask={editingTask}
       />
     </div>
   );

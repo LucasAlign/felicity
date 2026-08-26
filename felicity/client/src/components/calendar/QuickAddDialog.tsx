@@ -1,12 +1,16 @@
 import { useEffect, useState } from "react";
 import { format } from "date-fns";
-import type { Appointment } from "@shared/schema";
+import type { Appointment, Task } from "@shared/schema";
 import {
   useCreateAppointment,
   useDeleteAppointment,
   useUpdateAppointment,
 } from "@/hooks/useAppointments";
-import { useCreateTask } from "@/hooks/useTasks";
+import {
+  useCreateTask,
+  useDeleteTask,
+  useUpdateTask,
+} from "@/hooks/useTasks";
 import { useCategories } from "@/hooks/useCategories";
 import { colorForCategory } from "@/lib/categories";
 
@@ -25,11 +29,13 @@ export default function QuickAddDialog({
   onClose,
   defaultDate,
   editingAppointment,
+  editingTask = null,
 }: {
   open: boolean;
   onClose: () => void;
   defaultDate: Date;
   editingAppointment: Appointment | null;
+  editingTask?: Task | null;
 }) {
   const [entryType, setEntryType] = useState<EntryType>("appointment");
   const [title, setTitle] = useState("");
@@ -45,11 +51,20 @@ export default function QuickAddDialog({
   const updateAppointment = useUpdateAppointment();
   const deleteAppointment = useDeleteAppointment();
   const createTask = useCreateTask();
+  const updateTask = useUpdateTask();
+  const deleteTask = useDeleteTask();
 
   useEffect(() => {
     if (!open) return;
 
-    if (editingAppointment) {
+    if (editingTask) {
+      setEntryType("task");
+      setTitle(editingTask.title);
+      setDate(
+        editingTask.dueDate ? toDateInput(new Date(editingTask.dueDate)) : "",
+      );
+      setCategoryId(editingTask.categoryId ?? null);
+    } else if (editingAppointment) {
       setEntryType("appointment");
       setTitle(editingAppointment.title);
       setDate(toDateInput(new Date(editingAppointment.startTime)));
@@ -72,23 +87,32 @@ export default function QuickAddDialog({
       setLocation("");
       setCategoryId(null);
     }
-  }, [open, editingAppointment, defaultDate]);
+  }, [open, editingAppointment, editingTask, defaultDate]);
 
   if (!open) return null;
 
-  const isEditing = !!editingAppointment;
+  const isEditingAppointment = !!editingAppointment;
+  const isEditingTask = !!editingTask;
+  const isEditing = isEditingAppointment || isEditingTask;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!title.trim()) return;
 
     if (entryType === "task") {
-      await createTask.mutateAsync({
+      const taskData = {
         title,
         dueDate: date ? new Date(date) : null,
         categoryId,
-        source: "manual_entry",
-      } as any);
+      };
+      if (isEditingTask && editingTask) {
+        await updateTask.mutateAsync({ id: editingTask.id, data: taskData });
+      } else {
+        await createTask.mutateAsync({
+          ...taskData,
+          source: "manual_entry",
+        } as any);
+      }
       onClose();
       return;
     }
@@ -120,8 +144,13 @@ export default function QuickAddDialog({
   }
 
   async function handleDelete() {
-    if (!editingAppointment) return;
-    await deleteAppointment.mutateAsync(editingAppointment.id);
+    if (isEditingTask && editingTask) {
+      await deleteTask.mutateAsync(editingTask.id);
+    } else if (editingAppointment) {
+      await deleteAppointment.mutateAsync(editingAppointment.id);
+    } else {
+      return;
+    }
     onClose();
   }
 
@@ -129,7 +158,11 @@ export default function QuickAddDialog({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-forest-900/30 px-4">
       <div className="w-full max-w-md rounded-2xl bg-cream-50 p-6 shadow-soft">
         <h3 className="text-xl text-forest-700 mb-4">
-          {isEditing ? "Edit appointment" : "Quick add"}
+          {isEditingTask
+            ? "Edit task"
+            : isEditingAppointment
+              ? "Edit appointment"
+              : "Quick add"}
         </h3>
 
         {!isEditing && (
