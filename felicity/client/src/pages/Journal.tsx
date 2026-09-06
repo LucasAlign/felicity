@@ -8,10 +8,13 @@ import {
   useJournalEntries,
   useUpdateJournalEntry,
 } from "@/hooks/useJournal";
+import { useToast } from "@/components/Toast";
 
 function EntryCard({ entry }: { entry: JournalEntry }) {
   const updateEntry = useUpdateJournalEntry();
   const deleteEntry = useDeleteJournalEntry();
+  const createEntry = useCreateJournalEntry();
+  const { toast } = useToast();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(entry.content);
 
@@ -46,7 +49,17 @@ function EntryCard({ entry }: { entry: JournalEntry }) {
             </button>
           )}
           <button
-            onClick={() => deleteEntry.mutate(entry.id)}
+            onClick={() => {
+              deleteEntry.mutate(entry.id);
+              toast({
+                message: "Journal entry deleted.",
+                action: {
+                  label: "Undo",
+                  onClick: () =>
+                    createEntry.mutate({ content: entry.content }),
+                },
+              });
+            }}
             className="text-xs text-forest-300 hover:text-walnut-500"
           >
             Delete
@@ -93,6 +106,7 @@ function EntryCard({ entry }: { entry: JournalEntry }) {
 export default function Journal() {
   const { data: entries = [], isLoading } = useJournalEntries();
   const createEntry = useCreateJournalEntry();
+  const { toast } = useToast();
   const [content, setContent] = useState("");
 
   async function handleAdd(e: React.FormEvent) {
@@ -101,6 +115,7 @@ export default function Journal() {
     if (!trimmed) return;
     await createEntry.mutateAsync({ content: trimmed });
     setContent("");
+    toast({ message: "Journal entry added." });
   }
 
   return (

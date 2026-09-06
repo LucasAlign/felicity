@@ -11,6 +11,7 @@ import Projects from "@/pages/Projects";
 import Journal from "@/pages/Journal";
 import WhatIKnow from "@/pages/WhatIKnow";
 import AppShell from "@/components/AppShell";
+import { ToastProvider } from "@/components/Toast";
 
 function Router() {
   const [location] = useLocation();
@@ -55,7 +56,9 @@ function Router() {
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <Router />
+      <ToastProvider>
+        <Router />
+      </ToastProvider>
     </QueryClientProvider>
   );
 }

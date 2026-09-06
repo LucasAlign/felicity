@@ -11,6 +11,7 @@ import {
   useCreateCategory,
   useUpdateCategory,
 } from "@/hooks/useCategories";
+import { useToast } from "@/components/Toast";
 
 function ProjectCard({
   project,
@@ -24,6 +25,7 @@ function ProjectCard({
   const updateCategory = useUpdateCategory();
   const createCategory = useCreateCategory();
   const deleteProject = useDeleteProject();
+  const { toast } = useToast();
 
   const [assignId, setAssignId] = useState("");
   const [newName, setNewName] = useState("");
@@ -45,6 +47,7 @@ function ProjectCard({
       projectId: project.id,
     } as any);
     setNewName("");
+    toast({ message: "Category added." });
   }
 
   return (
@@ -131,6 +134,7 @@ function ProjectCard({
           />
           <input
             value={newName}
+            maxLength={60}
             onChange={(e) => setNewName(e.target.value)}
             placeholder="New category in this project…"
             className="flex-1 rounded-lg border border-forest-100 px-2 py-1.5 bg-white/80 text-forest-700 text-sm"
@@ -152,6 +156,7 @@ export default function Projects() {
   const { data: projects = [], isLoading } = useProjects();
   const { data: categories = [] } = useCategories();
   const createProject = useCreateProject();
+  const { toast } = useToast();
   const [newName, setNewName] = useState("");
 
   const unassigned = categories.filter((c) => c.projectId == null);
@@ -162,6 +167,7 @@ export default function Projects() {
     if (!name) return;
     await createProject.mutateAsync({ name });
     setNewName("");
+    toast({ message: "Project created." });
   }
 
   return (
@@ -180,6 +186,7 @@ export default function Projects() {
       <form onSubmit={handleAddProject} className="flex items-center gap-2">
         <input
           value={newName}
+          maxLength={60}
           onChange={(e) => setNewName(e.target.value)}
           placeholder="New project name…"
           className="flex-1 max-w-sm rounded-lg border border-forest-100 px-3 py-2 bg-white/80 text-forest-700"

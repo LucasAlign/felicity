@@ -13,6 +13,7 @@ import {
 } from "@/hooks/useTasks";
 import { useCategories } from "@/hooks/useCategories";
 import { colorForCategory } from "@/lib/categories";
+import { useToast } from "@/components/Toast";
 
 type EntryType = "appointment" | "task";
 
@@ -45,7 +46,9 @@ export default function QuickAddDialog({
   const [allDay, setAllDay] = useState(false);
   const [location, setLocation] = useState("");
   const [categoryId, setCategoryId] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
+  const { toast } = useToast();
   const { data: categories = [] } = useCategories();
   const createAppointment = useCreateAppointment();
   const updateAppointment = useUpdateAppointment();
@@ -56,6 +59,7 @@ export default function QuickAddDialog({
 
   useEffect(() => {
     if (!open) return;
+    setError(null);
 
     if (editingTask) {
       setEntryType("task");
@@ -97,33 +101,50 @@ export default function QuickAddDialog({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!title.trim()) return;
+    setError(null);
+    if (!title.trim()) {
+      setError("Please enter a title.");
+      return;
+    }
 
     if (entryType === "task") {
       const taskData = {
-        title,
+        title: title.trim(),
         dueDate: date ? new Date(date) : null,
         categoryId,
       };
-      if (isEditingTask && editingTask) {
-        await updateTask.mutateAsync({ id: editingTask.id, data: taskData });
-      } else {
-        await createTask.mutateAsync({
-          ...taskData,
-          source: "manual_entry",
-        } as any);
+      try {
+        if (isEditingTask && editingTask) {
+          await updateTask.mutateAsync({ id: editingTask.id, data: taskData });
+          toast({ message: "Task updated." });
+        } else {
+          await createTask.mutateAsync({
+            ...taskData,
+            source: "manual_entry",
+          } as any);
+          toast({ message: "Task added." });
+        }
+        onClose();
+      } catch {
+        setError("Something went wrong saving this task. Please try again.");
       }
-      onClose();
       return;
     }
 
     const startDateTime = allDay
       ? new Date(`${date}T00:00:00`)
       : new Date(`${date}T${startTime || "09:00"}:00`);
-    const endDateTime = endTime ? new Date(`${date}T${endTime}:00`) : null;
+    const endDateTime =
+      !allDay && endTime ? new Date(`${date}T${endTime}:00`) : null;
+
+    // Block negative-duration appointments before they reach the server.
+    if (endDateTime && endDateTime <= startDateTime) {
+      setError("End time must be after the start time.");
+      return;
+    }
 
     const payload = {
-      title,
+      title: title.trim(),
       startTime: startDateTime,
       endTime: endDateTime,
       allDay,
@@ -132,22 +153,61 @@ export default function QuickAddDialog({
       source: "manual_entry" as const,
     };
 
-    if (isEditing && editingAppointment) {
-      await updateAppointment.mutateAsync({
-        id: editingAppointment.id,
-        data: payload,
-      });
-    } else {
-      await createAppointment.mutateAsync(payload as any);
+    try {
+      if (isEditing && editingAppointment) {
+        await updateAppointment.mutateAsync({
+          id: editingAppointment.id,
+          data: payload,
+        });
+        toast({ message: "Appointment updated." });
+      } else {
+        await createAppointment.mutateAsync(payload as any);
+        toast({ message: "Appointment added." });
+      }
+      onClose();
+    } catch {
+      setError(
+        "Something went wrong saving this appointment. Please try again.",
+      );
     }
-    onClose();
   }
 
   async function handleDelete() {
     if (isEditingTask && editingTask) {
-      await deleteTask.mutateAsync(editingTask.id);
+      const removed = editingTask;
+      await deleteTask.mutateAsync(removed.id);
+      toast({
+        message: "Task deleted.",
+        action: {
+          label: "Undo",
+          onClick: () =>
+            createTask.mutate({
+              title: removed.title,
+              dueDate: removed.dueDate,
+              categoryId: removed.categoryId,
+              source: "manual_entry",
+            } as any),
+        },
+      });
     } else if (editingAppointment) {
-      await deleteAppointment.mutateAsync(editingAppointment.id);
+      const removed = editingAppointment;
+      await deleteAppointment.mutateAsync(removed.id);
+      toast({
+        message: "Appointment deleted.",
+        action: {
+          label: "Undo",
+          onClick: () =>
+            createAppointment.mutate({
+              title: removed.title,
+              startTime: removed.startTime,
+              endTime: removed.endTime,
+              allDay: removed.allDay,
+              location: removed.location,
+              categoryId: removed.categoryId,
+              source: "manual_entry",
+            } as any),
+        },
+      });
     } else {
       return;
     }
@@ -190,7 +250,11 @@ export default function QuickAddDialog({
             <input
               autoFocus
               value={title}
-              onChange={(e) => setTitle(e.target.value)}
+              maxLength={200}
+              onChange={(e) => {
+                setTitle(e.target.value);
+                if (error) setError(null);
+              }}
               className="w-full rounded-lg border border-forest-100 px-3 py-2 bg-white/80 text-forest-700"
               placeholder={
                 entryType === "task" ? "Pick up dry cleaning" : "Dentist appointment"
@@ -288,6 +352,12 @@ export default function QuickAddDialog({
                 />
               </div>
             </>
+          )}
+
+          {error && (
+            <p className="text-sm text-walnut-600" role="alert">
+              {error}
+            </p>
           )}
 
           <div className="flex items-center justify-between pt-2">

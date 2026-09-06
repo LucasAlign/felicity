@@ -3,6 +3,7 @@ import { addDays, format, isSameDay, subDays } from "date-fns";
 import { UtensilsCrossed } from "lucide-react";
 import type { Meal, MealSlot } from "@shared/schema";
 import { useCreateMeal, useDeleteMeal, useMeals } from "@/hooks/useMeals";
+import { useToast } from "@/components/Toast";
 
 const SLOTS: { id: MealSlot; label: string }[] = [
   { id: "breakfast", label: "Breakfast" },
@@ -15,6 +16,7 @@ export default function MealPlanner() {
   const { data: meals = [] } = useMeals();
   const createMeal = useCreateMeal();
   const deleteMeal = useDeleteMeal();
+  const { toast } = useToast();
 
   const [day, setDay] = useState(() => new Date());
   const [slot, setSlot] = useState<MealSlot>("dinner");
@@ -32,6 +34,7 @@ export default function MealPlanner() {
     const date = new Date(`${format(day, "yyyy-MM-dd")}T00:00:00`);
     await createMeal.mutateAsync({ date, slot, title: trimmed });
     setTitle("");
+    toast({ message: "Meal added." });
   }
 
   return (
@@ -86,7 +89,21 @@ export default function MealPlanner() {
                           {m.title}
                         </span>
                         <button
-                          onClick={() => deleteMeal.mutate(m.id)}
+                          onClick={() => {
+                            deleteMeal.mutate(m.id);
+                            toast({
+                              message: "Meal deleted.",
+                              action: {
+                                label: "Undo",
+                                onClick: () =>
+                                  createMeal.mutate({
+                                    date: m.date,
+                                    slot: m.slot,
+                                    title: m.title,
+                                  }),
+                              },
+                            });
+                          }}
                           className="text-forest-200 hover:text-walnut-500 opacity-0 group-hover:opacity-100 transition-opacity text-sm shrink-0"
                           aria-label="Delete meal"
                         >
@@ -119,6 +136,7 @@ export default function MealPlanner() {
         </select>
         <input
           value={title}
+          maxLength={120}
           onChange={(e) => setTitle(e.target.value)}
           placeholder="Plan a meal…"
           className="flex-1 min-w-0 rounded-lg border border-forest-100 px-3 py-2 bg-white/80 text-forest-700 text-sm"

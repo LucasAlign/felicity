@@ -76,6 +76,16 @@ function parseId(raw: string): number {
   return id;
 }
 
+// True when an appointment's end is at or before its start — a negative-duration
+// event we reject (see the appointment routes). Null/absent end is always fine.
+function endsBeforeStarts(
+  start: Date | null | undefined,
+  end: Date | null | undefined,
+): boolean {
+  if (!start || !end) return false;
+  return new Date(end).getTime() <= new Date(start).getTime();
+}
+
 // Minimal in-memory, per-user rate limiter. Enough to blunt abuse of the
 // expensive endpoints (OCR, brain-dump) on a single instance; swap for a
 // shared store (e.g. Redis) if the app is ever scaled horizontally.
@@ -219,6 +229,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!parsed.success) {
       return res.status(400).json({ message: parsed.error.message });
     }
+    if (endsBeforeStarts(parsed.data.startTime, parsed.data.endTime)) {
+      return res
+        .status(400)
+        .json({ message: "End time must be after the start time." });
+    }
     let appointment = await storage.createAppointment(userId, parsed.data);
     await syncAppointmentReminders(userId, appointment);
     // Mirror to Google right away so it shows up there without waiting for
@@ -235,6 +250,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const parsed = insertAppointmentSchema.partial().safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({ message: parsed.error.message });
+    }
+    // Guard against end ≤ start, merging the patch with the current values so a
+    // partial update (only start, or only end) is still validated correctly.
+    const current = await storage.getAppointment(userId, id);
+    if (!current) return res.status(404).json({ message: "Not found" });
+    const nextStart = parsed.data.startTime ?? current.startTime;
+    const nextEnd =
+      parsed.data.endTime !== undefined ? parsed.data.endTime : current.endTime;
+    if (endsBeforeStarts(nextStart, nextEnd)) {
+      return res
+        .status(400)
+        .json({ message: "End time must be after the start time." });
     }
     let appointment = await storage.updateAppointment(userId, id, parsed.data);
     if (!appointment) return res.status(404).json({ message: "Not found" });

@@ -2,10 +2,15 @@ import { useMemo, useState } from "react";
 import { format } from "date-fns";
 import { Pencil } from "lucide-react";
 import type { Task } from "@shared/schema";
-import { useDeleteTask, useUpdateTask } from "@/hooks/useTasks";
+import {
+  useCreateTask,
+  useDeleteTask,
+  useUpdateTask,
+} from "@/hooks/useTasks";
 import { useCategories } from "@/hooks/useCategories";
 import { colorForCategory } from "@/lib/categories";
-import { activeTasks, isArchived } from "@/lib/tasks";
+import { activeTasks, isArchived, isUnassigned } from "@/lib/tasks";
+import { useToast } from "@/components/Toast";
 
 function TaskRow({
   task,
@@ -16,6 +21,8 @@ function TaskRow({
 }) {
   const updateTask = useUpdateTask();
   const deleteTask = useDeleteTask();
+  const createTask = useCreateTask();
+  const { toast } = useToast();
   const { data: categories = [] } = useCategories();
 
   return (
@@ -59,7 +66,22 @@ function TaskRow({
           <Pencil size={14} strokeWidth={2} />
         </button>
         <button
-          onClick={() => deleteTask.mutate(task.id)}
+          onClick={() => {
+            deleteTask.mutate(task.id);
+            toast({
+              message: "Task deleted.",
+              action: {
+                label: "Undo",
+                onClick: () =>
+                  createTask.mutate({
+                    title: task.title,
+                    dueDate: task.dueDate,
+                    categoryId: task.categoryId,
+                    source: "manual_entry",
+                  } as any),
+              },
+            });
+          }}
           className="text-forest-200 hover:text-walnut-500 transition-colors text-sm"
           aria-label="Delete task"
         >
@@ -73,15 +95,22 @@ function TaskRow({
 export default function TasksPanel({
   tasks,
   onEditTask,
+  excludeUnassigned = false,
 }: {
   tasks: Task[];
   onEditTask: (task: Task) => void;
+  // When the Unassigned panel is also on screen (month view), hide undated
+  // tasks here so the two lists don't duplicate each other. (#21)
+  excludeUnassigned?: boolean;
 }) {
   const [showArchived, setShowArchived] = useState(false);
 
   // Active list = open tasks + tasks completed within the last 12h (shown
   // crossed off). Anything older than 12h is archived out of view. See #8.
-  const active = useMemo(() => activeTasks(tasks), [tasks]);
+  const active = useMemo(() => {
+    const list = activeTasks(tasks);
+    return excludeUnassigned ? list.filter((t) => !isUnassigned(t)) : list;
+  }, [tasks, excludeUnassigned]);
   const archivedTasks = useMemo(
     () => tasks.filter((t) => isArchived(t)),
     [tasks],

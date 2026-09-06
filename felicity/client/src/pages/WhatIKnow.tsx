@@ -12,6 +12,7 @@ import {
   useDeleteWisdomEntry,
   useWisdomEntries,
 } from "@/hooks/useWisdom";
+import { useToast } from "@/components/Toast";
 
 const CATEGORY_LABELS: Record<MemoryCategory, string> = {
   family: "Family",
@@ -124,6 +125,7 @@ function WisdomSection() {
   const { data: entries = [] } = useWisdomEntries();
   const createEntry = useCreateWisdomEntry();
   const deleteEntry = useDeleteWisdomEntry();
+  const { toast } = useToast();
   const [content, setContent] = useState("");
   const [source, setSource] = useState("");
 
@@ -137,6 +139,7 @@ function WisdomSection() {
     });
     setContent("");
     setSource("");
+    toast({ message: "Wisdom added." });
   }
 
   return (
@@ -151,6 +154,7 @@ function WisdomSection() {
       <form onSubmit={handleAdd} className="space-y-2">
         <textarea
           value={content}
+          maxLength={280}
           onChange={(e) => setContent(e.target.value)}
           placeholder="A saying, maxim, or bit of wisdom worth remembering…"
           rows={2}
@@ -159,6 +163,7 @@ function WisdomSection() {
         <div className="flex gap-2">
           <input
             value={source}
+            maxLength={80}
             onChange={(e) => setSource(e.target.value)}
             placeholder="Source (optional)"
             className="flex-1 rounded-lg border border-forest-100 px-3 py-2 bg-white/80 text-forest-700 text-sm"
@@ -195,7 +200,20 @@ function WisdomSection() {
                 )}
               </div>
               <button
-                onClick={() => deleteEntry.mutate(w.id)}
+                onClick={() => {
+                  deleteEntry.mutate(w.id);
+                  toast({
+                    message: "Wisdom deleted.",
+                    action: {
+                      label: "Undo",
+                      onClick: () =>
+                        createEntry.mutate({
+                          content: w.content,
+                          source: w.source ?? undefined,
+                        }),
+                    },
+                  });
+                }}
                 className="text-forest-200 hover:text-walnut-500 opacity-0 group-hover:opacity-100 transition-opacity text-sm shrink-0"
                 aria-label="Delete wisdom entry"
               >

@@ -19,12 +19,19 @@ import {
 import { useAuth } from "@/hooks/useAuth";
 import {
   useAppointments,
+  useCreateAppointment,
   useDeleteAppointment,
 } from "@/hooks/useAppointments";
-import { useDeleteTask, useTasks, useUpdateTask } from "@/hooks/useTasks";
+import {
+  useCreateTask,
+  useDeleteTask,
+  useTasks,
+  useUpdateTask,
+} from "@/hooks/useTasks";
 import { useCategories } from "@/hooks/useCategories";
 import { colorForCategory } from "@/lib/categories";
 import { useWisdomEntries } from "@/hooks/useWisdom";
+import { useToast } from "@/components/Toast";
 import MealPlanner from "@/components/dashboard/MealPlanner";
 import QuickAddDialog from "@/components/calendar/QuickAddDialog";
 import BrainDumpDialog from "@/components/braindump/BrainDumpDialog";
@@ -86,6 +93,8 @@ function TaskEntryRow({
 }) {
   const updateTask = useUpdateTask();
   const deleteTask = useDeleteTask();
+  const createTask = useCreateTask();
+  const { toast } = useToast();
   const { data: categories = [] } = useCategories();
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(task.title);
@@ -157,7 +166,22 @@ function TaskEntryRow({
           <Pencil size={14} strokeWidth={2} />
         </button>
         <button
-          onClick={() => deleteTask.mutate(task.id)}
+          onClick={() => {
+            deleteTask.mutate(task.id);
+            toast({
+              message: "Task deleted.",
+              action: {
+                label: "Undo",
+                onClick: () =>
+                  createTask.mutate({
+                    title: task.title,
+                    dueDate: task.dueDate,
+                    categoryId: task.categoryId,
+                    source: "manual_entry",
+                  } as any),
+              },
+            });
+          }}
           className="text-forest-200 hover:text-walnut-500 transition-colors text-sm"
           aria-label="Delete task"
         >
@@ -176,6 +200,8 @@ function AppointmentEntryRow({
   onEdit: (appointment: Appointment) => void;
 }) {
   const deleteAppointment = useDeleteAppointment();
+  const createAppointment = useCreateAppointment();
+  const { toast } = useToast();
   const { data: categories = [] } = useCategories();
 
   return (
@@ -201,7 +227,25 @@ function AppointmentEntryRow({
         </div>
       </div>
       <button
-        onClick={() => deleteAppointment.mutate(appointment.id)}
+        onClick={() => {
+          deleteAppointment.mutate(appointment.id);
+          toast({
+            message: "Appointment deleted.",
+            action: {
+              label: "Undo",
+              onClick: () =>
+                createAppointment.mutate({
+                  title: appointment.title,
+                  startTime: appointment.startTime,
+                  endTime: appointment.endTime,
+                  allDay: appointment.allDay,
+                  location: appointment.location,
+                  categoryId: appointment.categoryId,
+                  source: "manual_entry",
+                } as any),
+            },
+          });
+        }}
         className="text-forest-200 hover:text-walnut-500 opacity-0 group-hover:opacity-100 transition-opacity text-sm mt-0.5"
         aria-label="Delete appointment"
       >

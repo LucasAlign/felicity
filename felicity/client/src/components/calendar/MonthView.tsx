@@ -10,8 +10,8 @@ import {
   startOfWeek,
 } from "date-fns";
 import { useState } from "react";
-import { Clock, Sun } from "lucide-react";
-import type { Appointment } from "@shared/schema";
+import { CheckCircle2, Clock, Sun } from "lucide-react";
+import type { Appointment, Task } from "@shared/schema";
 import { useCategories } from "@/hooks/useCategories";
 import { colorForCategory } from "@/lib/categories";
 import { TASK_DRAG_MIME } from "@/lib/tasks";
@@ -21,14 +21,20 @@ const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 export default function MonthView({
   currentDate,
   appointments,
+  tasks = [],
   onSelectDay,
   onAssignTask,
+  onSelectTask,
 }: {
   currentDate: Date;
   appointments: Appointment[];
+  // Tasks with a due date render as chips on their day, distinct from
+  // appointments, so a dropped/scheduled task is visible on the grid (#20).
+  tasks?: Task[];
   onSelectDay: (day: Date) => void;
   // Called when an unassigned task is dropped onto a day (#4).
   onAssignTask?: (taskId: number, day: Date) => void;
+  onSelectTask?: (task: Task) => void;
 }) {
   const { data: categories = [] } = useCategories();
   const [dragOverKey, setDragOverKey] = useState<string | null>(null);
@@ -52,6 +58,12 @@ export default function MonthView({
         {days.map((day) => {
           const dayAppointments = appointments.filter((a) =>
             isSameDay(new Date(a.startTime), day),
+          );
+          const dayTasks = tasks.filter(
+            (t) =>
+              !t.completed &&
+              t.dueDate &&
+              isSameDay(new Date(t.dueDate), day),
           );
           const inMonth = isSameMonth(day, currentDate);
           const dayKey = day.toISOString();
@@ -151,6 +163,35 @@ export default function MonthView({
                 {dayAppointments.length > 3 && (
                   <div className="text-xs text-forest-300">
                     +{dayAppointments.length - 3} more
+                  </div>
+                )}
+                {dayTasks.slice(0, 2).map((t) => (
+                  <div
+                    key={`task-${t.id}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onSelectTask?.(t);
+                    }}
+                    className="flex items-center gap-1 rounded border border-dashed border-forest-200 bg-white/60 px-1.5 py-0.5 text-xs text-forest-600 hover:bg-white"
+                    title={`Task: ${t.title}`}
+                  >
+                    <CheckCircle2
+                      className="h-3 w-3 shrink-0 text-forest-400"
+                      aria-hidden="true"
+                    />
+                    <span
+                      className="inline-block h-2 w-2 shrink-0 rounded-full"
+                      style={{
+                        backgroundColor: colorForCategory(t.categoryId, categories),
+                      }}
+                      aria-hidden="true"
+                    />
+                    <span className="truncate">{t.title}</span>
+                  </div>
+                ))}
+                {dayTasks.length > 2 && (
+                  <div className="text-xs text-forest-300">
+                    +{dayTasks.length - 2} more
                   </div>
                 )}
               </div>

@@ -17,6 +17,7 @@ import TasksPanel from "@/components/calendar/TasksPanel";
 import UnassignedPanel from "@/components/calendar/UnassignedPanel";
 import QuickAddDialog from "@/components/calendar/QuickAddDialog";
 import GoogleCalendarPanel from "@/components/calendar/GoogleCalendarPanel";
+import { useToast } from "@/components/Toast";
 import type { Appointment, Task } from "@shared/schema";
 
 type ViewMode = "month" | "week" | "day";
@@ -48,13 +49,26 @@ export default function Calendar() {
     useAppointments();
   const { data: tasks = [] } = useTasks();
   const updateTask = useUpdateTask();
+  const { toast } = useToast();
 
   // Dropping an unassigned task onto a day schedules it for that date (#4).
   // Local midnight (not `new Date(day)`) matches how the quick-add form stores
   // a due date, so it lands on the intended day west of UTC.
   function handleAssignTask(taskId: number, day: Date) {
     const dueDate = new Date(`${format(day, "yyyy-MM-dd")}T00:00:00`);
+    const task = tasks.find((t) => t.id === taskId);
+    const previousDue = task?.dueDate ?? null;
     updateTask.mutate({ id: taskId, data: { dueDate } });
+    // Confirm the drop landed (the month grid doesn't show a task chip on its
+    // own), and offer a one-tap undo back to the prior due date. (#20)
+    toast({
+      message: `Scheduled for ${format(day, "EEE, MMM d")}.`,
+      action: {
+        label: "Undo",
+        onClick: () =>
+          updateTask.mutate({ id: taskId, data: { dueDate: previousDue } }),
+      },
+    });
   }
 
   function goToday() {
@@ -175,8 +189,10 @@ export default function Calendar() {
               <MonthView
                 currentDate={currentDate}
                 appointments={appointments}
+                tasks={tasks}
                 onSelectDay={handleSelectDay}
                 onAssignTask={handleAssignTask}
+                onSelectTask={handleEditTask}
               />
             )}
             {view === "week" && (
@@ -198,7 +214,11 @@ export default function Calendar() {
 
         <div className="space-y-5">
           {view === "month" && <UnassignedPanel tasks={tasks} />}
-          <TasksPanel tasks={tasks} onEditTask={handleEditTask} />
+          <TasksPanel
+            tasks={tasks}
+            onEditTask={handleEditTask}
+            excludeUnassigned={view === "month"}
+          />
         </div>
       </div>
 
