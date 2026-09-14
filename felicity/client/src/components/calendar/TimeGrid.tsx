@@ -2,7 +2,8 @@ import { format, isSameDay, isToday } from "date-fns";
 import type { Appointment } from "@shared/schema";
 import { GRID_HOURS, HOUR_HEIGHT, formatHour, timeGridStyle } from "@/lib/calendar";
 import { useCategories } from "@/hooks/useCategories";
-import { colorForCategory } from "@/lib/categories";
+import { colorForCategory, nameForCategory } from "@/lib/categories";
+import { StickyNote } from "lucide-react";
 
 export default function TimeGrid({
   days,
@@ -14,14 +15,22 @@ export default function TimeGrid({
   onSelectAppointment: (appointment: Appointment) => void;
 }) {
   const { data: categories = [] } = useCategories();
-  const allDayAppointments = appointments.filter((a) => a.allDay);
-  const timedAppointments = appointments.filter((a) => !a.allDay);
+  const allDayAppointments = appointments
+    .filter((a) => a.allDay)
+    .sort((a, b) => a.title.localeCompare(b.title));
+  const timedAppointments = appointments
+    .filter((a) => !a.allDay)
+    .sort(
+      (a, b) =>
+        new Date(a.startTime).getTime() - new Date(b.startTime).getTime(),
+    );
+  const dayColumns = `4rem repeat(${days.length}, minmax(${days.length > 3 ? "7rem" : "0"}, 1fr))`;
 
   return (
-    <div className="rounded-2xl bg-white/70 border border-forest-100 shadow-soft overflow-hidden">
+    <div className="overflow-x-auto rounded-2xl bg-white/70 border border-forest-100 shadow-soft">
       <div
         className="grid border-b border-forest-100"
-        style={{ gridTemplateColumns: `4rem repeat(${days.length}, 1fr)` }}
+        style={{ gridTemplateColumns: dayColumns }}
       >
         <div />
         {days.map((day) => (
@@ -44,7 +53,7 @@ export default function TimeGrid({
       {allDayAppointments.length > 0 && (
         <div
           className="grid border-b border-forest-100"
-          style={{ gridTemplateColumns: `4rem repeat(${days.length}, 1fr)` }}
+          style={{ gridTemplateColumns: dayColumns }}
         >
           <div className="text-xs text-forest-300 px-2 py-1">All day</div>
           {days.map((day) => (
@@ -74,6 +83,7 @@ export default function TimeGrid({
                     />
                     {a.source === "google_calendar" && "● "}
                     {a.title}
+                    {a.description && <StickyNote className="ml-1 inline h-3 w-3" aria-label="Has notes" />}
                   </button>
                 ))}
             </div>
@@ -84,7 +94,7 @@ export default function TimeGrid({
       <div className="overflow-y-auto max-h-[32rem]">
         <div
           className="grid relative"
-          style={{ gridTemplateColumns: `4rem repeat(${days.length}, 1fr)` }}
+          style={{ gridTemplateColumns: dayColumns }}
         >
           <div>
             {GRID_HOURS.map((hour) => (
@@ -143,9 +153,13 @@ export default function TimeGrid({
                         />
                         {a.source === "google_calendar" && "● "}
                         {a.title}
+                        {a.description && <StickyNote className="ml-1 inline h-3 w-3" aria-label="Has notes" />}
                       </div>
                       <div className="opacity-80 truncate">
                         {format(new Date(a.startTime), "h:mma")}
+                      </div>
+                      <div className="truncate text-[10px] opacity-75">
+                        {nameForCategory(a.categoryId, categories)}
                       </div>
                     </button>
                   );

@@ -45,6 +45,7 @@ export default function QuickAddDialog({
   const [endTime, setEndTime] = useState("");
   const [allDay, setAllDay] = useState(false);
   const [location, setLocation] = useState("");
+  const [description, setDescription] = useState("");
   const [categoryId, setCategoryId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -68,6 +69,7 @@ export default function QuickAddDialog({
         editingTask.dueDate ? toDateInput(new Date(editingTask.dueDate)) : "",
       );
       setCategoryId(editingTask.categoryId ?? null);
+      setDescription(editingTask.description ?? "");
     } else if (editingAppointment) {
       setEntryType("appointment");
       setTitle(editingAppointment.title);
@@ -81,6 +83,7 @@ export default function QuickAddDialog({
       setAllDay(editingAppointment.allDay);
       setLocation(editingAppointment.location ?? "");
       setCategoryId(editingAppointment.categoryId ?? null);
+      setDescription(editingAppointment.description ?? "");
     } else {
       setEntryType("appointment");
       setTitle("");
@@ -89,6 +92,7 @@ export default function QuickAddDialog({
       setEndTime("");
       setAllDay(false);
       setLocation("");
+      setDescription("");
       setCategoryId(null);
     }
   }, [open, editingAppointment, editingTask, defaultDate]);
@@ -110,6 +114,7 @@ export default function QuickAddDialog({
     if (entryType === "task") {
       const taskData = {
         title: title.trim(),
+        description: description.trim() || null,
         dueDate: date ? new Date(date) : null,
         categoryId,
       };
@@ -145,6 +150,7 @@ export default function QuickAddDialog({
 
     const payload = {
       title: title.trim(),
+      description: description.trim() || null,
       startTime: startDateTime,
       endTime: endDateTime,
       allDay,
@@ -183,6 +189,7 @@ export default function QuickAddDialog({
           onClick: () =>
             createTask.mutate({
               title: removed.title,
+              description: removed.description,
               dueDate: removed.dueDate,
               categoryId: removed.categoryId,
               source: "manual_entry",
@@ -199,6 +206,7 @@ export default function QuickAddDialog({
           onClick: () =>
             createAppointment.mutate({
               title: removed.title,
+              description: removed.description,
               startTime: removed.startTime,
               endTime: removed.endTime,
               allDay: removed.allDay,
@@ -215,8 +223,9 @@ export default function QuickAddDialog({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-forest-900/30 px-4">
-      <div className="w-full max-w-md rounded-2xl bg-cream-50 p-6 shadow-soft">
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-forest-900/30 sm:items-center sm:px-4">
+      <div className="max-h-[90dvh] w-full overflow-y-auto rounded-t-2xl bg-cream-50 p-5 shadow-soft sm:max-w-md sm:rounded-2xl sm:p-6">
+        <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-forest-200 sm:hidden" />
         <h3 className="text-xl text-forest-700 mb-4">
           {isEditingTask
             ? "Edit task"
@@ -278,11 +287,12 @@ export default function QuickAddDialog({
                 }
                 className="flex-1 rounded-lg border border-forest-100 px-3 py-2 bg-white/80 text-forest-700"
               >
-                <option value="">Unassigned</option>
+                <option value="">Uncategorized</option>
                 {categories.map((c) => (
                   <option key={c.id} value={c.id}>
-                    {c.parentId ? "— " : ""}
-                    {c.name}
+                    {c.parentId
+                      ? `${categories.find((parent) => parent.id === c.parentId)?.name ?? "Category"} / ${c.name}`
+                      : c.name}
                   </option>
                 ))}
               </select>
@@ -353,6 +363,20 @@ export default function QuickAddDialog({
               </div>
             </>
           )}
+
+          <div>
+            <label className="block text-sm text-forest-500 mb-1">
+              Notes (optional)
+            </label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={3}
+              maxLength={4000}
+              className="w-full resize-y rounded-lg border border-forest-100 bg-white/80 px-3 py-2 text-forest-700"
+              placeholder="Details, context, links, or anything you need to remember"
+            />
+          </div>
 
           {error && (
             <p className="text-sm text-walnut-600" role="alert">

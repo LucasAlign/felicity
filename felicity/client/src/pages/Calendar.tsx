@@ -17,25 +17,37 @@ import TasksPanel from "@/components/calendar/TasksPanel";
 import UnassignedPanel from "@/components/calendar/UnassignedPanel";
 import QuickAddDialog from "@/components/calendar/QuickAddDialog";
 import GoogleCalendarPanel from "@/components/calendar/GoogleCalendarPanel";
+import AgendaView from "@/components/calendar/AgendaView";
+import ItemDetailSheet, {
+  type CalendarSelection,
+} from "@/components/calendar/ItemDetailSheet";
+import { useCategories } from "@/hooks/useCategories";
 import { useToast } from "@/components/Toast";
 import type { Appointment, Task } from "@shared/schema";
+import { MoreHorizontal } from "lucide-react";
 
-type ViewMode = "month" | "week" | "day";
+type ViewMode = "agenda" | "month" | "week" | "day";
 
 const VIEW_LABELS: Record<ViewMode, string> = {
+  agenda: "Agenda",
   month: "Month",
   week: "Week",
   day: "Day",
 };
 
 const TITLE_FORMAT: Record<ViewMode, string> = {
+  agenda: "MMMM yyyy",
   month: "MMMM yyyy",
   week: "MMMM yyyy",
   day: "EEEE, MMMM d",
 };
 
 export default function Calendar() {
-  const [view, setView] = useState<ViewMode>("month");
+  const [view, setView] = useState<ViewMode>(() =>
+    typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches
+      ? "agenda"
+      : "month",
+  );
   const [currentDate, setCurrentDate] = useState(new Date());
   const [quickAddOpen, setQuickAddOpen] = useState(false);
   // The date the quick-add modal pre-fills. Driven by which day was clicked in
@@ -44,10 +56,14 @@ export default function Calendar() {
   const [editingAppointment, setEditingAppointment] =
     useState<Appointment | null>(null);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [selection, setSelection] = useState<CalendarSelection | null>(null);
+  const [mobileList, setMobileList] = useState<"inbox" | "tasks">("inbox");
+  const [mobileSettingsOpen, setMobileSettingsOpen] = useState(false);
 
   const { data: appointments = [], isLoading: appointmentsLoading } =
     useAppointments();
   const { data: tasks = [] } = useTasks();
+  const { data: categories = [] } = useCategories();
   const updateTask = useUpdateTask();
   const { toast } = useToast();
 
@@ -76,13 +92,15 @@ export default function Calendar() {
   }
 
   function goPrev() {
-    if (view === "month") setCurrentDate((d) => subMonths(d, 1));
+    if (view === "agenda") setCurrentDate((d) => subWeeks(d, 2));
+    else if (view === "month") setCurrentDate((d) => subMonths(d, 1));
     else if (view === "week") setCurrentDate((d) => subWeeks(d, 1));
     else setCurrentDate((d) => subDays(d, 1));
   }
 
   function goNext() {
-    if (view === "month") setCurrentDate((d) => addMonths(d, 1));
+    if (view === "agenda") setCurrentDate((d) => addWeeks(d, 2));
+    else if (view === "month") setCurrentDate((d) => addMonths(d, 1));
     else if (view === "week") setCurrentDate((d) => addWeeks(d, 1));
     else setCurrentDate((d) => addDays(d, 1));
   }
@@ -98,14 +116,29 @@ export default function Calendar() {
   }
 
   function handleSelectAppointment(appointment: Appointment) {
-    setEditingTask(null);
-    setEditingAppointment(appointment);
+    setSelection({ kind: "appointment", value: appointment });
+  }
+
+  function handleSelectTask(task: Task) {
+    setSelection({ kind: "task", value: task });
+  }
+
+  function handleScheduleTask(task: Task) {
+    setSelection(null);
+    setEditingAppointment(null);
+    setEditingTask(task);
     setQuickAddOpen(true);
   }
 
-  function handleEditTask(task: Task) {
-    setEditingAppointment(null);
-    setEditingTask(task);
+  function handleEditSelection(item: CalendarSelection) {
+    setSelection(null);
+    if (item.kind === "appointment") {
+      setEditingTask(null);
+      setEditingAppointment(item.value);
+    } else {
+      setEditingAppointment(null);
+      setEditingTask(item.value);
+    }
     setQuickAddOpen(true);
   }
 
@@ -116,44 +149,44 @@ export default function Calendar() {
   }
 
   return (
-    <div className="space-y-5">
-      <div className="flex items-center justify-between flex-wrap gap-3">
+    <div className="space-y-4 sm:space-y-5">
+      <div className="grid gap-3 lg:grid-cols-[1fr_auto] lg:items-center">
         <div>
           <h2 className="text-3xl text-forest-700">
             {format(currentDate, TITLE_FORMAT[view])}
           </h2>
         </div>
 
-        <div className="flex items-center gap-2">
-          <div className="flex items-center rounded-lg border border-forest-100 overflow-hidden">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="order-1 flex min-w-0 flex-1 items-center overflow-hidden rounded-lg border border-forest-100 sm:order-none sm:flex-none">
             <button
               onClick={goPrev}
-              className="px-3 py-1.5 text-forest-500 hover:bg-forest-50"
+              className="min-h-11 px-3 py-1.5 text-forest-500 hover:bg-forest-50 sm:min-h-0"
               aria-label="Previous"
             >
               &larr;
             </button>
             <button
               onClick={goToday}
-              className="px-3 py-1.5 text-sm text-forest-500 hover:bg-forest-50 border-x border-forest-100"
+              className="min-h-11 flex-1 border-x border-forest-100 px-3 py-1.5 text-sm text-forest-500 hover:bg-forest-50 sm:min-h-0 sm:flex-none"
             >
               Today
             </button>
             <button
               onClick={goNext}
-              className="px-3 py-1.5 text-forest-500 hover:bg-forest-50"
+              className="min-h-11 px-3 py-1.5 text-forest-500 hover:bg-forest-50 sm:min-h-0"
               aria-label="Next"
             >
               &rarr;
             </button>
           </div>
 
-          <div className="flex items-center rounded-lg border border-forest-100 overflow-hidden">
+          <div className="order-3 flex w-full items-center overflow-hidden rounded-lg border border-forest-100 sm:order-none sm:w-auto">
             {(Object.keys(VIEW_LABELS) as ViewMode[]).map((mode) => (
               <button
                 key={mode}
                 onClick={() => setView(mode)}
-                className={`px-3 py-1.5 text-sm ${
+                className={`min-h-11 flex-1 px-2 py-1.5 text-sm sm:min-h-0 sm:flex-none sm:px-3 ${
                   view === mode
                     ? "bg-forest-600 text-cream-50"
                     : "text-forest-500 hover:bg-forest-50"
@@ -171,12 +204,30 @@ export default function Calendar() {
               setQuickAddDate(currentDate);
               setQuickAddOpen(true);
             }}
-            className="rounded-lg bg-walnut-500 text-cream-50 px-4 py-1.5 text-sm shadow-soft hover:bg-walnut-600 transition-colors"
+            className="order-2 min-h-11 rounded-lg bg-walnut-500 px-4 py-1.5 text-sm text-cream-50 shadow-soft transition-colors hover:bg-walnut-600 sm:order-none sm:min-h-0"
           >
             + Add
           </button>
 
-          <GoogleCalendarPanel />
+          <div className="relative order-2 sm:hidden">
+            <button
+              type="button"
+              onClick={() => setMobileSettingsOpen((open) => !open)}
+              className="flex h-11 w-11 items-center justify-center rounded-lg border border-forest-100 text-forest-500"
+              aria-label="Calendar settings"
+              aria-expanded={mobileSettingsOpen}
+            >
+              <MoreHorizontal className="h-5 w-5" />
+            </button>
+            {mobileSettingsOpen && (
+              <div className="absolute right-0 z-40 mt-2 w-72 rounded-xl border border-forest-100 bg-cream-50 p-4 shadow-soft-md">
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-forest-400">Calendar settings</p>
+                <GoogleCalendarPanel />
+              </div>
+            )}
+          </div>
+
+          <div className="hidden sm:block"><GoogleCalendarPanel /></div>
         </div>
       </div>
 
@@ -185,6 +236,15 @@ export default function Calendar() {
           <div className="text-forest-400">Loading calendar&hellip;</div>
         ) : (
           <>
+            {view === "agenda" && (
+              <AgendaView
+                currentDate={currentDate}
+                appointments={appointments}
+                tasks={tasks}
+                onSelectAppointment={handleSelectAppointment}
+                onSelectTask={handleSelectTask}
+              />
+            )}
             {view === "month" && (
               <MonthView
                 currentDate={currentDate}
@@ -192,7 +252,8 @@ export default function Calendar() {
                 tasks={tasks}
                 onSelectDay={handleSelectDay}
                 onAssignTask={handleAssignTask}
-                onSelectTask={handleEditTask}
+                onSelectAppointment={handleSelectAppointment}
+                onSelectTask={handleSelectTask}
               />
             )}
             {view === "week" && (
@@ -212,14 +273,40 @@ export default function Calendar() {
           </>
         )}
 
-        <div className="space-y-5">
-          {view === "month" && <UnassignedPanel tasks={tasks} />}
+        <div className="hidden space-y-5 lg:block">
+          {view === "month" && (
+            <UnassignedPanel tasks={tasks} onScheduleTask={handleScheduleTask} />
+          )}
           <TasksPanel
             tasks={tasks}
-            onEditTask={handleEditTask}
+            onSelectTask={handleSelectTask}
             excludeUnassigned={view === "month"}
           />
         </div>
+      </div>
+
+      <div className="lg:hidden">
+        <div className="mb-3 flex overflow-hidden rounded-lg border border-forest-100 bg-white/60">
+          {(["inbox", "tasks"] as const).map((mode) => (
+            <button
+              key={mode}
+              type="button"
+              onClick={() => setMobileList(mode)}
+              className={`min-h-11 flex-1 text-sm capitalize ${
+                mobileList === mode
+                  ? "bg-forest-600 text-cream-50"
+                  : "text-forest-500"
+              }`}
+            >
+              {mode}
+            </button>
+          ))}
+        </div>
+        {mobileList === "inbox" ? (
+          <UnassignedPanel tasks={tasks} onScheduleTask={handleScheduleTask} />
+        ) : (
+          <TasksPanel tasks={tasks} onSelectTask={handleSelectTask} excludeUnassigned />
+        )}
       </div>
 
       <QuickAddDialog
@@ -228,6 +315,12 @@ export default function Calendar() {
         defaultDate={quickAddDate}
         editingAppointment={editingAppointment}
         editingTask={editingTask}
+      />
+      <ItemDetailSheet
+        selection={selection}
+        categories={categories}
+        onClose={() => setSelection(null)}
+        onEdit={handleEditSelection}
       />
     </div>
   );
